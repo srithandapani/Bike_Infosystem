@@ -285,7 +285,9 @@ class MainActivity : FragmentActivity() {
                         onNotifySnapchatChange = { settingsViewModel.updateNotifySnapchat(it) },
                         onConnectBtDevice = { connectivityViewModel.connectToDevice(it) },
                         onStartBtDiscovery = { connectivityViewModel.startDiscovery() },
-                        onCancelBtDiscovery = { connectivityViewModel.cancelDiscovery() }
+                        onCancelBtDiscovery = { connectivityViewModel.cancelDiscovery() },
+                        onGpsClick = { checkLocationSettingsAndStart() },
+                        onBluetoothClick = { checkAndPromptBluetooth() }
                     )
                 }
             }

@@ -218,7 +218,7 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
         } catch (_: SecurityException) {}
     }
 
-    fun connectToDevice(device: ConnectedBtDevice) {
+    fun connectToDevice(device: ConnectedBtDevice, fromUserClick: Boolean = true) {
         val adapter = bluetoothAdapter ?: return
         if (!adapter.isEnabled) return
         try {
@@ -233,6 +233,13 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                     )
                 }
                 return
+            }
+
+            _uiState.update {
+                it.copy(
+                    bluetoothStatus = BluetoothConnectionStatus.READY_TO_CONNECT,
+                    connectedDeviceName = "Connecting to ${device.name}..."
+                )
             }
 
             var invoked = false
@@ -250,19 +257,21 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                 invoked = true
             }
 
-            if (!invoked) {
+            if (!invoked && fromUserClick) {
                 val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
                 }
                 getApplication<Application>().startActivity(intent)
             }
         } catch (e: Exception) {
-            try {
-                val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                getApplication<Application>().startActivity(intent)
-            } catch (_: Exception) {}
+            if (fromUserClick) {
+                try {
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    getApplication<Application>().startActivity(intent)
+                } catch (_: Exception) {}
+            }
         }
     }
 
@@ -273,8 +282,13 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
             return
         }
         refreshBluetoothState()
-        // If not connected to any device, initiate discovery so available headsets / phones can be found
+        // If not connected to any device, prepare connection readiness
         if (!_uiState.value.isConnected) {
+            val preferredDevice = _uiState.value.pairedDevices.firstOrNull { it.isHelmet }
+                ?: _uiState.value.pairedDevices.firstOrNull()
+            if (preferredDevice != null) {
+                connectToDevice(preferredDevice, fromUserClick = false)
+            }
             startDiscovery()
         }
     }

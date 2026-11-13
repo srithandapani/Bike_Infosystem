@@ -95,6 +95,8 @@ fun DashboardMainScreen(
     onConnectBtDevice: (ConnectedBtDevice) -> Unit = {},
     onStartBtDiscovery: () -> Unit = {},
     onCancelBtDiscovery: () -> Unit = {},
+    onGpsClick: () -> Unit = {},
+    onBluetoothClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var activeTab by remember { mutableStateOf(MotoDriveTab.NAVIGATION) }
@@ -140,7 +142,9 @@ fun DashboardMainScreen(
                 isBluetoothEnabled = connectivityUiState.isBluetoothEnabled,
                 isBluetoothConnected = connectivityUiState.isConnected,
                 bluetoothStatus = connectivityUiState.bluetoothStatus,
-                connectedDeviceName = connectivityUiState.connectedDeviceName
+                connectedDeviceName = connectivityUiState.connectedDeviceName,
+                onGpsClick = onGpsClick,
+                onBluetoothClick = onBluetoothClick
             )
 
             // MAIN COCKPIT VIEWPORT

@@ -2,6 +2,7 @@ package com.motodrive.tft.core.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -41,6 +42,8 @@ fun StatusBar(
     isBluetoothConnected: Boolean = false,
     bluetoothStatus: BluetoothConnectionStatus = BluetoothConnectionStatus.BLUETOOTH_OFF,
     connectedDeviceName: String? = null,
+    onGpsClick: () -> Unit = {},
+    onBluetoothClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalCockpitColors.current
@@ -128,10 +131,14 @@ fun StatusBar(
                 )
             }
 
-            // GPS Status
+            // GPS Status (Interactive: tap to enable/check location settings)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onGpsClick() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Icon(
                     imageVector = if (isGpsLocked) Icons.Default.GpsFixed else Icons.Default.GpsNotFixed,
@@ -152,11 +159,11 @@ fun StatusBar(
             val btLabel = when {
                 !isBtOn -> "BT OFF"
                 iphoneBleState.isConnected -> "iPHONE"
-                isBluetoothConnected -> connectedDeviceName?.take(9)?.uppercase() ?: "CONNECTED"
-                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> "SEARCHING"
-                bluetoothStatus == BluetoothConnectionStatus.READY_TO_CONNECT -> "READY"
+                isBluetoothConnected -> connectedDeviceName?.take(14)?.uppercase() ?: "CONNECTED"
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> "SEARCHING..."
+                bluetoothStatus == BluetoothConnectionStatus.READY_TO_CONNECT -> "READY TO CONNECT"
                 bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> "DISCONNECTED"
-                bluetoothStatus == BluetoothConnectionStatus.CONNECTED -> connectedDeviceName?.take(9)?.uppercase() ?: "CONNECTED"
+                bluetoothStatus == BluetoothConnectionStatus.CONNECTED -> connectedDeviceName?.take(14)?.uppercase() ?: "CONNECTED"
                 else -> "BT ON"
             }
             val btIcon = when {
@@ -180,9 +187,14 @@ fun StatusBar(
                 else -> colors.secondaryText
             }
 
+            // Bluetooth Status (Interactive: tap to enable/prompt bluetooth)
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                modifier = Modifier
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onBluetoothClick() }
+                    .padding(horizontal = 4.dp, vertical = 2.dp)
             ) {
                 Icon(
                     imageVector = btIcon,
