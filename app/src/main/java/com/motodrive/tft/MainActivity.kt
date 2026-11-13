@@ -95,6 +95,15 @@ class MainActivity : ComponentActivity() {
             }
         }
 
+        // Sync speed unit from saved settings
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                settingsViewModel.settings.collect { settings ->
+                    speedometerViewModel.setSpeedUnit(settings.speedUnit)
+                }
+            }
+        }
+
         // Auto-connect to paired iPhone on launch
         appleBleManager.connectToBondedIphone()
 
@@ -170,6 +179,7 @@ class MainActivity : ComponentActivity() {
                         onSpeedUnitChange = {
                             settingsViewModel.updateSpeedUnit(it)
                             speedometerViewModel.setSpeedUnit(it)
+                            navigationViewModel.setSpeedUnit(it)
                         },
                         onTempUnitChange = {
                             settingsViewModel.updateTemperatureUnit(it)

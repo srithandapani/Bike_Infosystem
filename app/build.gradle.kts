@@ -91,6 +91,7 @@ dependencies {
     // OSMDroid for embedded offline/online map canvas
     implementation("org.osmdroid:osmdroid-android:6.1.18")
 
+    testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }

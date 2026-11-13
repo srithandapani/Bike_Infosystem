@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motodrive.tft.core.components.GlowCard
 import com.motodrive.tft.core.theme.*
+import com.motodrive.tft.core.util.Units
 import com.motodrive.tft.media.MediaUiState
 import com.motodrive.tft.navigation.NavigationMapView
 import com.motodrive.tft.navigation.NavigationUiState
@@ -127,8 +128,9 @@ fun RidingModeScreen(
                     )
                 }
 
+                val displaySpeed = Units.speedToDisplay(speedUiState.currentSpeedKmH, speedUiState.speedUnit).toInt()
                 Text(
-                    text = "${speedUiState.currentSpeedKmH.toInt()}",
+                    text = "$displaySpeed",
                     style = MotoDriveTypography.displayLarge.copy(
                         fontSize = 58.sp,
                         fontWeight = FontWeight.ExtraBold
@@ -137,7 +139,7 @@ fun RidingModeScreen(
                 )
 
                 Text(
-                    text = speedUiState.speedUnit.uppercase(),
+                    text = Units.speedLabel(speedUiState.speedUnit),
                     style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue, fontWeight = FontWeight.Bold)
                 )
             }

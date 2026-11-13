@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.motodrive.tft.core.components.GlowCard
 import com.motodrive.tft.core.theme.*
+import com.motodrive.tft.core.util.Units
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -370,6 +371,28 @@ fun NavigationMapView(
                 .padding(horizontal = 14.dp, vertical = 10.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Error Alert Banner
+            uiState.errorMessage?.let { errorMsg ->
+                GlowCard(
+                    shape = RoundedCornerShape(8.dp),
+                    backgroundColor = PanelBackground,
+                    borderColor = AlertRed,
+                    borderWidth = 1.dp,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(Icons.Default.Warning, contentDescription = null, tint = AlertRed, modifier = Modifier.size(16.dp))
+                        Text(text = errorMsg, style = MotoDriveTypography.labelSmall.copy(color = PrimaryText), maxLines = 1)
+                    }
+                }
+            }
+
             // Quick Destination Chips Bar (All launch in-app navigation directly)
             Row(
                 modifier = Modifier
@@ -482,7 +505,7 @@ fun NavigationMapView(
                                     color = SecondaryText
                                 )
                                 Text(
-                                    text = "${uiState.remainingDistanceKm} km",
+                                    text = Units.formatTripDistance(uiState.remainingDistanceKm, uiState.speedUnit),
                                     style = MotoDriveTypography.bodyLarge.copy(
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 13.sp

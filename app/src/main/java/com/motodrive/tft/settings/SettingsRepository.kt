@@ -24,7 +24,13 @@ data class AppSettings(
     val notifyWhatsApp: Boolean = true,
     val notifyInstagram: Boolean = true,
     val notifySms: Boolean = true,
-    val notifySnapchat: Boolean = true
+    val notifySnapchat: Boolean = true,
+    val homeLat: Double? = null,
+    val homeLon: Double? = null,
+    val homeName: String = "",
+    val workLat: Double? = null,
+    val workLon: Double? = null,
+    val workName: String = ""
 )
 
 class SettingsRepository(private val context: Context) {
@@ -45,6 +51,12 @@ class SettingsRepository(private val context: Context) {
         val NOTIFY_INSTAGRAM = booleanPreferencesKey("notify_instagram")
         val NOTIFY_SMS = booleanPreferencesKey("notify_sms")
         val NOTIFY_SNAPCHAT = booleanPreferencesKey("notify_snapchat")
+        val HOME_LAT = doublePreferencesKey("home_lat")
+        val HOME_LON = doublePreferencesKey("home_lon")
+        val HOME_NAME = stringPreferencesKey("home_name")
+        val WORK_LAT = doublePreferencesKey("work_lat")
+        val WORK_LON = doublePreferencesKey("work_lon")
+        val WORK_NAME = stringPreferencesKey("work_name")
     }
 
     val settingsFlow: Flow<AppSettings> = context.dataStore.data.map { prefs ->
@@ -63,7 +75,13 @@ class SettingsRepository(private val context: Context) {
             notifyWhatsApp = prefs[Keys.NOTIFY_WHATSAPP] ?: true,
             notifyInstagram = prefs[Keys.NOTIFY_INSTAGRAM] ?: true,
             notifySms = prefs[Keys.NOTIFY_SMS] ?: true,
-            notifySnapchat = prefs[Keys.NOTIFY_SNAPCHAT] ?: true
+            notifySnapchat = prefs[Keys.NOTIFY_SNAPCHAT] ?: true,
+            homeLat = prefs[Keys.HOME_LAT],
+            homeLon = prefs[Keys.HOME_LON],
+            homeName = prefs[Keys.HOME_NAME] ?: "",
+            workLat = prefs[Keys.WORK_LAT],
+            workLon = prefs[Keys.WORK_LON],
+            workName = prefs[Keys.WORK_NAME] ?: ""
         )
     }
 
@@ -125,6 +143,20 @@ class SettingsRepository(private val context: Context) {
 
     suspend fun setNotifySnapchat(enabled: Boolean) {
         context.dataStore.edit { it[Keys.NOTIFY_SNAPCHAT] = enabled }
+    }
+
+    suspend fun saveLocation(type: String, lat: Double, lon: Double, name: String) {
+        context.dataStore.edit { prefs ->
+            if (type.equals("home", ignoreCase = true)) {
+                prefs[Keys.HOME_LAT] = lat
+                prefs[Keys.HOME_LON] = lon
+                prefs[Keys.HOME_NAME] = name
+            } else if (type.equals("work", ignoreCase = true)) {
+                prefs[Keys.WORK_LAT] = lat
+                prefs[Keys.WORK_LON] = lon
+                prefs[Keys.WORK_NAME] = name
+            }
+        }
     }
 }
 
