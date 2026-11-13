@@ -30,6 +30,8 @@ fun PhoneConnectivityScreen(
     uiState: ConnectivityUiState,
     onQuickCall: (String) -> Unit,
     onConnectDevice: (ConnectedBtDevice) -> Unit = {},
+    onDisconnectDevice: (ConnectedBtDevice) -> Unit = {},
+    onUnpairDevice: (ConnectedBtDevice) -> Unit = {},
     onStartDiscovery: () -> Unit = {},
     onCancelDiscovery: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -57,7 +59,8 @@ fun PhoneConnectivityScreen(
                 backgroundColor = colors.cardElevated,
                 borderColor = when (uiState.bluetoothStatus) {
                     BluetoothConnectionStatus.CONNECTED -> SuccessGreen
-                    BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                    BluetoothConnectionStatus.SEARCHING,
+                    BluetoothConnectionStatus.PAIRING -> WarningOrange
                     BluetoothConnectionStatus.DISCONNECTED,
                     BluetoothConnectionStatus.BLUETOOTH_OFF -> AlertRed
                     else -> colors.primaryAccent
@@ -71,18 +74,21 @@ fun PhoneConnectivityScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Row(
+                        modifier = Modifier.weight(1f),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         val statusIcon = when (uiState.bluetoothStatus) {
                             BluetoothConnectionStatus.BLUETOOTH_OFF -> Icons.Default.BluetoothDisabled
                             BluetoothConnectionStatus.CONNECTED -> Icons.Default.BluetoothConnected
-                            BluetoothConnectionStatus.SEARCHING -> Icons.AutoMirrored.Filled.BluetoothSearching
+                            BluetoothConnectionStatus.SEARCHING,
+                            BluetoothConnectionStatus.PAIRING -> Icons.AutoMirrored.Filled.BluetoothSearching
                             else -> Icons.Default.Bluetooth
                         }
                         val statusTint = when (uiState.bluetoothStatus) {
                             BluetoothConnectionStatus.CONNECTED -> SuccessGreen
-                            BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                            BluetoothConnectionStatus.SEARCHING,
+                            BluetoothConnectionStatus.PAIRING -> WarningOrange
                             BluetoothConnectionStatus.DISCONNECTED,
                             BluetoothConnectionStatus.BLUETOOTH_OFF -> AlertRed
                             else -> colors.primaryAccent
@@ -95,7 +101,7 @@ fun PhoneConnectivityScreen(
                             modifier = Modifier.size(20.dp)
                         )
 
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = uiState.bluetoothStatus.label.uppercase(),
                                 style = MotoDriveTypography.titleMedium.copy(
@@ -104,7 +110,7 @@ fun PhoneConnectivityScreen(
                                 ),
                                 color = statusTint
                             )
-                            if (uiState.isConnected) {
+                            if (uiState.isConnected || uiState.bluetoothStatus == BluetoothConnectionStatus.PAIRING) {
                                 Text(
                                     text = uiState.connectedDeviceName,
                                     style = MotoDriveTypography.labelSmall.copy(fontSize = 10.sp),
@@ -205,20 +211,19 @@ fun PhoneConnectivityScreen(
                 } else {
                     items(uiState.pairedDevices) { dev ->
                         GlowCard(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onConnectDevice(dev) },
+                            modifier = Modifier.fillMaxWidth(),
                             backgroundColor = if (dev.isConnected) colors.cardElevated else colors.card,
                             borderColor = if (dev.isConnected) SuccessGreen else colors.border
                         ) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
@@ -237,7 +242,7 @@ fun PhoneConnectivityScreen(
                                         )
                                     }
 
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = dev.name,
                                             style = MotoDriveTypography.titleMedium.copy(fontSize = 13.sp),
@@ -245,19 +250,65 @@ fun PhoneConnectivityScreen(
                                             maxLines = 1
                                         )
                                         Text(
-                                            text = if (dev.isConnected) "Connected Audio" else "Ready to Connect (Tap)",
+                                            text = if (dev.isConnected) "Connected Audio" else "Paired (Tap to Connect)",
                                             style = MotoDriveTypography.labelSmall.copy(fontSize = 10.sp),
                                             color = if (dev.isConnected) SuccessGreen else colors.secondaryText
                                         )
                                     }
                                 }
 
-                                Box(
-                                    modifier = Modifier
-                                        .size(10.dp)
-                                        .clip(CircleShape)
-                                        .background(if (dev.isConnected) SuccessGreen else colors.border)
-                                )
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    if (dev.isConnected) {
+                                        Button(
+                                            onClick = { onDisconnectDevice(dev) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = AlertRed.copy(alpha = 0.85f)),
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                            shape = RoundedCornerShape(4.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Text(
+                                                "DISCONNECT",
+                                                style = MotoDriveTypography.labelSmall.copy(
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            )
+                                        }
+                                    } else {
+                                        Button(
+                                            onClick = { onConnectDevice(dev) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = colors.primaryAccent),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                            shape = RoundedCornerShape(4.dp),
+                                            modifier = Modifier.height(28.dp)
+                                        ) {
+                                            Text(
+                                                "CONNECT",
+                                                style = MotoDriveTypography.labelSmall.copy(
+                                                    fontSize = 9.sp,
+                                                    fontWeight = FontWeight.Bold,
+                                                    color = Color.White
+                                                )
+                                            )
+                                        }
+                                    }
+
+                                    IconButton(
+                                        onClick = { onUnpairDevice(dev) },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DeleteOutline,
+                                            contentDescription = "Unpair",
+                                            tint = colors.secondaryText.copy(alpha = 0.6f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
@@ -281,9 +332,9 @@ fun PhoneConnectivityScreen(
                         GlowCard(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onConnectDevice(dev) },
+                                .clickable(enabled = !dev.isBonding) { onConnectDevice(dev) },
                             backgroundColor = colors.card,
-                            borderColor = colors.primaryAccent.copy(alpha = 0.5f)
+                            borderColor = if (dev.isBonding) WarningOrange else colors.primaryAccent.copy(alpha = 0.5f)
                         ) {
                             Row(
                                 modifier = Modifier
@@ -293,16 +344,17 @@ fun PhoneConnectivityScreen(
                                 horizontalArrangement = Arrangement.SpaceBetween
                             ) {
                                 Row(
+                                    modifier = Modifier.weight(1f),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (dev.isHelmet) Icons.Default.HeadsetMic else Icons.Default.Bluetooth,
                                         contentDescription = null,
-                                        tint = colors.primaryAccent,
+                                        tint = if (dev.isBonding) WarningOrange else colors.primaryAccent,
                                         modifier = Modifier.size(18.dp)
                                     )
-                                    Column {
+                                    Column(modifier = Modifier.weight(1f)) {
                                         Text(
                                             text = dev.name,
                                             style = MotoDriveTypography.titleMedium.copy(fontSize = 12.sp),
@@ -310,21 +362,50 @@ fun PhoneConnectivityScreen(
                                             maxLines = 1
                                         )
                                         Text(
-                                            text = "Tap to Pair & Connect",
+                                            text = if (dev.isBonding) "Pairing in progress..." else "Tap to Pair & Connect",
                                             style = MotoDriveTypography.labelSmall.copy(fontSize = 9.sp),
-                                            color = colors.secondaryText
+                                            color = if (dev.isBonding) WarningOrange else colors.secondaryText
                                         )
                                     }
                                 }
 
-                                Text(
-                                    text = "PAIR",
-                                    style = MotoDriveTypography.labelSmall.copy(
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        color = colors.primaryAccent
-                                    )
-                                )
+                                if (dev.isBonding) {
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp,
+                                            color = WarningOrange
+                                        )
+                                        Text(
+                                            text = "PAIRING...",
+                                            style = MotoDriveTypography.labelSmall.copy(
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = WarningOrange
+                                            )
+                                        )
+                                    }
+                                } else {
+                                    Button(
+                                        onClick = { onConnectDevice(dev) },
+                                        colors = ButtonDefaults.buttonColors(containerColor = colors.primaryAccent),
+                                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 2.dp),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.height(28.dp)
+                                    ) {
+                                        Text(
+                                            text = "PAIR",
+                                            style = MotoDriveTypography.labelSmall.copy(
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color.White
+                                            )
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

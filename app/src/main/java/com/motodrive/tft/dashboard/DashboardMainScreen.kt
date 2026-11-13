@@ -93,6 +93,8 @@ fun DashboardMainScreen(
     onNotifySmsChange: (Boolean) -> Unit = {},
     onNotifySnapchatChange: (Boolean) -> Unit = {},
     onConnectBtDevice: (ConnectedBtDevice) -> Unit = {},
+    onDisconnectBtDevice: (ConnectedBtDevice) -> Unit = {},
+    onUnpairBtDevice: (ConnectedBtDevice) -> Unit = {},
     onStartBtDiscovery: () -> Unit = {},
     onCancelBtDiscovery: () -> Unit = {},
     onGpsClick: () -> Unit = {},
@@ -284,6 +286,8 @@ fun DashboardMainScreen(
                                 uiState = connectivityUiState,
                                 onQuickCall = onQuickCall,
                                 onConnectDevice = onConnectBtDevice,
+                                onDisconnectDevice = onDisconnectBtDevice,
+                                onUnpairDevice = onUnpairBtDevice,
                                 onStartDiscovery = onStartBtDiscovery,
                                 onCancelDiscovery = onCancelBtDiscovery
                             )

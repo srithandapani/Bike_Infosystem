@@ -31,6 +31,7 @@ enum class BluetoothConnectionStatus(val label: String) {
     BLUETOOTH_ON("Bluetooth ON"),
     SEARCHING("Searching for Devices"),
     READY_TO_CONNECT("Ready to Connect"),
+    PAIRING("Pairing Device"),
     CONNECTED("Connected"),
     DISCONNECTED("Disconnected")
 }
@@ -39,7 +40,8 @@ data class ConnectedBtDevice(
     val name: String,
     val address: String,
     val isConnected: Boolean,
-    val isHelmet: Boolean
+    val isHelmet: Boolean,
+    val isBonding: Boolean = false
 )
 
 data class ConnectivityUiState(
@@ -110,6 +112,7 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                             )
                         }
                     } else {
+                        bindBluetoothProfiles()
                         initializeBluetoothReadiness()
                     }
                 }
@@ -132,7 +135,19 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                         @Suppress("DEPRECATION")
                         intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
                     }
-                    dev?.let { handleDiscoveredDevice(it) }
+                    val extraName = intent.getStringExtra(BluetoothDevice.EXTRA_NAME)
+                    dev?.let { handleDiscoveredDevice(it, extraName) }
+                }
+                BluetoothDevice.ACTION_BOND_STATE_CHANGED -> {
+                    val dev: BluetoothDevice? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice::class.java)
+                    } else {
+                        @Suppress("DEPRECATION")
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }
+                    val bondState = intent.getIntExtra(BluetoothDevice.EXTRA_BOND_STATE, BluetoothDevice.ERROR)
+                    val prevBondState = intent.getIntExtra(BluetoothDevice.EXTRA_PREVIOUS_BOND_STATE, BluetoothDevice.ERROR)
+                    dev?.let { handleBondStateChanged(it, bondState, prevBondState) }
                 }
                 BluetoothDevice.ACTION_ACL_DISCONNECTED -> {
                     _uiState.update {
@@ -167,6 +182,7 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
             addAction(BluetoothAdapter.ACTION_DISCOVERY_STARTED)
             addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED)
             addAction(BluetoothDevice.ACTION_FOUND)
+            addAction(BluetoothDevice.ACTION_BOND_STATE_CHANGED)
             addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
             addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
             addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
@@ -175,15 +191,66 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
         getApplication<Application>().registerReceiver(btReceiver, filter)
     }
 
-    private fun handleDiscoveredDevice(dev: BluetoothDevice) {
-        val name = dev.name ?: "Nearby Bluetooth Device"
+    private fun handleBondStateChanged(dev: BluetoothDevice, bondState: Int, prevBondState: Int) {
+        val devName = dev.name ?: "Bluetooth Device"
+        when (bondState) {
+            BluetoothDevice.BOND_BONDING -> {
+                _uiState.update { state ->
+                    val updatedDiscovered = state.discoveredDevices.map {
+                        if (it.address == dev.address) it.copy(isBonding = true) else it
+                    }
+                    state.copy(
+                        bluetoothStatus = BluetoothConnectionStatus.PAIRING,
+                        connectedDeviceName = "Pairing with $devName...",
+                        discoveredDevices = updatedDiscovered
+                    )
+                }
+            }
+            BluetoothDevice.BOND_BONDED -> {
+                discoveredDevicesList.removeAll { it.address == dev.address }
+                refreshBluetoothState()
+                _uiState.update { state ->
+                    state.copy(
+                        discoveredDevices = discoveredDevicesList.toList(),
+                        bluetoothStatus = BluetoothConnectionStatus.READY_TO_CONNECT,
+                        connectedDeviceName = "Paired with $devName. Connecting..."
+                    )
+                }
+                connectProfiles(dev)
+            }
+            BluetoothDevice.BOND_NONE -> {
+                discoveredDevicesList.removeAll { it.address == dev.address }
+                refreshBluetoothState()
+                _uiState.update { state ->
+                    state.copy(discoveredDevices = discoveredDevicesList.toList())
+                }
+            }
+        }
+    }
+
+    private fun handleDiscoveredDevice(dev: BluetoothDevice, extraName: String? = null) {
         val addr = dev.address ?: return
-        if (discoveredDevicesList.none { it.address == addr }) {
-            val isHelmet = name.contains("Cardo", ignoreCase = true) ||
-                    name.contains("Sena", ignoreCase = true) ||
-                    name.contains("Helmet", ignoreCase = true) ||
-                    name.contains("Headset", ignoreCase = true)
-            discoveredDevicesList.add(ConnectedBtDevice(name, addr, false, isHelmet))
+        // Do not add already bonded devices to nearby discovered list
+        val isAlreadyBonded = bluetoothAdapter?.bondedDevices?.any { it.address == addr } == true
+        if (isAlreadyBonded) return
+
+        val rawName = dev.name ?: extraName
+        val name = if (!rawName.isNullOrBlank()) rawName else "Nearby Bluetooth Device"
+        val isHelmet = name.contains("Cardo", ignoreCase = true) ||
+                name.contains("Sena", ignoreCase = true) ||
+                name.contains("Helmet", ignoreCase = true) ||
+                name.contains("Headset", ignoreCase = true)
+
+        val existingIndex = discoveredDevicesList.indexOfFirst { it.address == addr }
+        if (existingIndex >= 0) {
+            val existing = discoveredDevicesList[existingIndex]
+            if (existing.name == "Nearby Bluetooth Device" && name != "Nearby Bluetooth Device") {
+                discoveredDevicesList[existingIndex] = existing.copy(name = name, isHelmet = isHelmet)
+                _uiState.update { it.copy(discoveredDevices = discoveredDevicesList.toList()) }
+            }
+        } else {
+            val isBonding = dev.bondState == BluetoothDevice.BOND_BONDING
+            discoveredDevicesList.add(ConnectedBtDevice(name, addr, false, isHelmet, isBonding = isBonding))
             _uiState.update { it.copy(discoveredDevices = discoveredDevicesList.toList()) }
         }
     }
@@ -222,15 +289,31 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
         val adapter = bluetoothAdapter ?: return
         if (!adapter.isEnabled) return
         try {
-            cancelDiscovery()
+            // Cancel discovery before initiating bond or profile connection to prevent HCI timeouts
+            if (adapter.isDiscovering) {
+                adapter.cancelDiscovery()
+            }
+            _uiState.update { it.copy(isSearching = false) }
+
             val remoteDevice = adapter.getRemoteDevice(device.address)
             if (remoteDevice.bondState == BluetoothDevice.BOND_NONE) {
-                remoteDevice.createBond()
-                _uiState.update {
-                    it.copy(
-                        bluetoothStatus = BluetoothConnectionStatus.READY_TO_CONNECT,
-                        connectedDeviceName = "Pairing with ${device.name}..."
-                    )
+                val bondInitiated = remoteDevice.createBond()
+                if (bondInitiated) {
+                    _uiState.update { state ->
+                        val updatedDiscovered = state.discoveredDevices.map {
+                            if (it.address == device.address) it.copy(isBonding = true) else it
+                        }
+                        state.copy(
+                            bluetoothStatus = BluetoothConnectionStatus.PAIRING,
+                            connectedDeviceName = "Pairing with ${device.name}...",
+                            discoveredDevices = updatedDiscovered
+                        )
+                    }
+                } else if (fromUserClick) {
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    getApplication<Application>().startActivity(intent)
                 }
                 return
             }
@@ -242,7 +325,32 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                 )
             }
 
-            var invoked = false
+            val connected = connectProfiles(remoteDevice)
+            if (!connected && fromUserClick) {
+                val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                getApplication<Application>().startActivity(intent)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            if (fromUserClick) {
+                try {
+                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    getApplication<Application>().startActivity(intent)
+                } catch (_: Exception) {}
+            }
+        }
+    }
+
+    fun connectProfiles(remoteDevice: BluetoothDevice): Boolean {
+        var invoked = false
+        try {
+            if (a2dpProfile == null || headsetProfile == null) {
+                bindBluetoothProfiles()
+            }
             val connectA2dpMethod = a2dpProfile?.javaClass?.getMethod("connect", BluetoothDevice::class.java)
             if (connectA2dpMethod != null && a2dpProfile != null) {
                 connectA2dpMethod.isAccessible = true
@@ -256,22 +364,51 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                 connectHeadsetMethod.invoke(headsetProfile, remoteDevice)
                 invoked = true
             }
-
-            if (!invoked && fromUserClick) {
-                val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                getApplication<Application>().startActivity(intent)
-            }
         } catch (e: Exception) {
-            if (fromUserClick) {
-                try {
-                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    getApplication<Application>().startActivity(intent)
-                } catch (_: Exception) {}
+            e.printStackTrace()
+        }
+        return invoked
+    }
+
+    fun disconnectDevice(device: ConnectedBtDevice) {
+        val adapter = bluetoothAdapter ?: return
+        try {
+            val remoteDevice = adapter.getRemoteDevice(device.address)
+            val disconnectA2dpMethod = a2dpProfile?.javaClass?.getMethod("disconnect", BluetoothDevice::class.java)
+            if (disconnectA2dpMethod != null && a2dpProfile != null) {
+                disconnectA2dpMethod.isAccessible = true
+                disconnectA2dpMethod.invoke(a2dpProfile, remoteDevice)
             }
+
+            val disconnectHeadsetMethod = headsetProfile?.javaClass?.getMethod("disconnect", BluetoothDevice::class.java)
+            if (disconnectHeadsetMethod != null && headsetProfile != null) {
+                disconnectHeadsetMethod.isAccessible = true
+                disconnectHeadsetMethod.invoke(headsetProfile, remoteDevice)
+            }
+
+            _uiState.update {
+                it.copy(
+                    isConnected = false,
+                    bluetoothStatus = BluetoothConnectionStatus.DISCONNECTED,
+                    connectedDeviceName = "Disconnected"
+                )
+            }
+            refreshBluetoothState(keepDisconnectedStatus = true)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    fun unpairDevice(device: ConnectedBtDevice) {
+        val adapter = bluetoothAdapter ?: return
+        try {
+            val remoteDevice = adapter.getRemoteDevice(device.address)
+            val removeBondMethod = remoteDevice.javaClass.getMethod("removeBond")
+            removeBondMethod.isAccessible = true
+            removeBondMethod.invoke(remoteDevice)
+            refreshBluetoothState()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -356,15 +493,18 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
         }
 
         val hasConnected = connectedDevice != null || paired.any { it.isConnected }
-        val devName = connectedDevice?.name
-            ?: paired.firstOrNull { it.isConnected }?.name
-            ?: if (keepDisconnectedStatus) "Disconnected"
-            else if (paired.isNotEmpty()) "Ready to Connect"
-            else "Bluetooth ON"
+        val devName = when {
+            hasConnected -> connectedDevice?.name ?: paired.firstOrNull { it.isConnected }?.name ?: "Connected"
+            _uiState.value.bluetoothStatus == BluetoothConnectionStatus.PAIRING -> _uiState.value.connectedDeviceName
+            keepDisconnectedStatus -> "Disconnected"
+            paired.isNotEmpty() -> "Ready to Connect"
+            else -> "Bluetooth ON"
+        }
 
         val status = when {
             !isEnabled -> BluetoothConnectionStatus.BLUETOOTH_OFF
             hasConnected -> BluetoothConnectionStatus.CONNECTED
+            _uiState.value.bluetoothStatus == BluetoothConnectionStatus.PAIRING -> BluetoothConnectionStatus.PAIRING
             _uiState.value.isSearching || adapter?.isDiscovering == true -> BluetoothConnectionStatus.SEARCHING
             keepDisconnectedStatus -> BluetoothConnectionStatus.DISCONNECTED
             paired.isNotEmpty() -> BluetoothConnectionStatus.READY_TO_CONNECT

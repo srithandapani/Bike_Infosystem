@@ -161,6 +161,7 @@ fun StatusBar(
                 iphoneBleState.isConnected -> "iPHONE"
                 isBluetoothConnected -> connectedDeviceName?.take(14)?.uppercase() ?: "CONNECTED"
                 bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> "SEARCHING..."
+                bluetoothStatus == BluetoothConnectionStatus.PAIRING -> "PAIRING..."
                 bluetoothStatus == BluetoothConnectionStatus.READY_TO_CONNECT -> "READY TO CONNECT"
                 bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> "DISCONNECTED"
                 bluetoothStatus == BluetoothConnectionStatus.CONNECTED -> connectedDeviceName?.take(14)?.uppercase() ?: "CONNECTED"
@@ -169,20 +170,23 @@ fun StatusBar(
             val btIcon = when {
                 !isBtOn -> Icons.Default.BluetoothDisabled
                 isBtConnected -> Icons.Default.BluetoothConnected
-                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> Icons.AutoMirrored.Filled.BluetoothSearching
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING ||
+                bluetoothStatus == BluetoothConnectionStatus.PAIRING -> Icons.AutoMirrored.Filled.BluetoothSearching
                 else -> Icons.Default.Bluetooth
             }
             val btTint = when {
                 !isBtOn -> colors.secondaryText.copy(alpha = 0.4f)
                 isBtConnected -> ElectricBlue
-                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING ||
+                bluetoothStatus == BluetoothConnectionStatus.PAIRING -> WarningOrange
                 bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> AlertRed
                 else -> ElectricBlue.copy(alpha = 0.75f)
             }
             val btTextColor = when {
                 !isBtOn -> colors.secondaryText.copy(alpha = 0.4f)
                 isBtConnected -> colors.primaryText
-                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING ||
+                bluetoothStatus == BluetoothConnectionStatus.PAIRING -> WarningOrange
                 bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> AlertRed
                 else -> colors.secondaryText
             }
