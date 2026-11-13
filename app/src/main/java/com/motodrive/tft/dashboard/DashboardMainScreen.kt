@@ -1,11 +1,7 @@
 package com.motodrive.tft.dashboard
 
-import com.motodrive.tft.core.util.Units
-
-import android.location.Location
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
+import androidx.compose.animation.*
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -30,21 +26,19 @@ import com.motodrive.tft.connectivity.apple.IphoneBleConnectionState
 import com.motodrive.tft.connectivity.apple.IphoneNotificationCenterScreen
 import com.motodrive.tft.connectivity.apple.IphoneNotificationItem
 import com.motodrive.tft.connectivity.apple.IphoneTrackInfo
-import com.motodrive.tft.core.components.GlowCard
-import com.motodrive.tft.core.components.MSportBottomBar
-import com.motodrive.tft.core.components.MSportTopBar
-import com.motodrive.tft.core.components.MotoDriveTab
+import com.motodrive.tft.core.components.*
 import com.motodrive.tft.core.theme.*
+import com.motodrive.tft.core.util.Units
 import com.motodrive.tft.launcher.AppLauncherScreen
 import com.motodrive.tft.media.FullScreenMediaScreen
 import com.motodrive.tft.media.MediaPlayerCompactCard
 import com.motodrive.tft.media.MediaUiState
 import com.motodrive.tft.navigation.NavigationMapView
 import com.motodrive.tft.navigation.NavigationUiState
+import com.motodrive.tft.navigation.PlaceSearchResult
 import com.motodrive.tft.riding.RidingModeScreen
 import com.motodrive.tft.settings.AppSettings
 import com.motodrive.tft.settings.SettingsScreen
-import com.motodrive.tft.speedometer.SpeedometerGauge
 import com.motodrive.tft.speedometer.SpeedometerUiState
 import com.motodrive.tft.trip.TripComputerScreen
 import com.motodrive.tft.voice.VoiceUiState
@@ -75,7 +69,10 @@ fun DashboardMainScreen(
     onSeekTrack: (Long) -> Unit,
     onLaunchMusicApp: (String) -> Unit,
     onStartNavigation: (String) -> Unit,
+    onStartPlaceNavigation: (PlaceSearchResult) -> Unit = {},
     onCancelNavigation: () -> Unit,
+    onSaveLocationAs: (String) -> Unit = {},
+    onSearchQueryChange: (String) -> Unit = {},
     onLaunchGoogleMaps: ((String) -> Unit)? = null,
     onResetTrip: () -> Unit,
     onQuickCall: (String) -> Unit,
@@ -98,7 +95,12 @@ fun DashboardMainScreen(
     var activeTab by remember { mutableStateOf(MotoDriveTab.NAVIGATION) }
     val colors = LocalCockpitColors.current
 
-    // If Riding Mode is active, display the streamlined motorcycle riding cockpit
+    // Auto riding mode detection: above 5 km/h, auto-simplify cockpit to minimize distraction
+    val isMoving by remember(speedUiState.currentSpeedKmH) {
+        derivedStateOf { speedUiState.currentSpeedKmH > 5.0f }
+    }
+
+    // Full Riding Cockpit View
     if (isRidingMode) {
         RidingModeScreen(
             currentLocation = speedUiState.lastLocation,
@@ -121,118 +123,87 @@ fun DashboardMainScreen(
             .background(colors.background)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // TOP STATUS BAR (TVS RONIN Branding, Clock, GPS, BT, iPhone, Battery)
-            MSportTopBar(
-                bluetoothConnected = connectivityUiState.pairedDevices.any { it.isConnected } || iphoneBleState.isConnected,
-                gpsFix = speedUiState.hasGpsFix,
-                batteryPercent = 88,
-                isCharging = false,
-                networkStatus = connectivityUiState.networkType,
-                temperatureText = "${weatherUiState.temperatureCelsius.toInt()}${settings.temperatureUnit}",
-                is24Hour = settings.is24HourClock
+            // THIN CINEMATIC STATUS BAR (Top)
+            StatusBar(
+                currentTimeMillis = System.currentTimeMillis(),
+                is24Hour = settings.is24HourClock,
+                isGpsLocked = speedUiState.hasGpsFix,
+                satellitesCount = if (speedUiState.hasGpsFix) 12 else 0,
+                iphoneBleState = iphoneBleState,
+                weatherState = weatherUiState,
+                isRidingMode = isMoving
             )
 
-            // MAIN CONTENT VIEWPORT
+            // MAIN COCKPIT VIEWPORT
             Box(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
-                    .padding(8.dp)
+                    .padding(horizontal = 8.dp, vertical = 6.dp)
             ) {
-                when (activeTab) {
-                    MotoDriveTab.NAVIGATION -> {
-                        // Responsive Navigation Map + Instrument Panel (Landscape & Portrait)
-                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val isPortrait = maxHeight > maxWidth
-                            if (isPortrait) {
+                AnimatedContent(
+                    targetState = activeTab,
+                    transitionSpec = {
+                        fadeIn(animationSpec = tween(220)) togetherWith fadeOut(animationSpec = tween(180))
+                    },
+                    label = "TabTransition"
+                ) { target ->
+                    when (target) {
+                        MotoDriveTab.NAVIGATION -> {
+                            // Cinematic Landscape Cockpit: ~65% Map / Navigation + ~35% Speed & Guidance
+                            Row(
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                // Left 65%: Embedded Google Navigation / Map View
+                                NavigationMapView(
+                                    currentLocation = speedUiState.lastLocation,
+                                    currentSpeedKmH = speedUiState.currentSpeedKmH,
+                                    uiState = navUiState,
+                                    onStartNavigation = onStartNavigation,
+                                    onStartPlaceNavigation = onStartPlaceNavigation,
+                                    onCancelNavigation = onCancelNavigation,
+                                    onSaveLocationAs = onSaveLocationAs,
+                                    onSearchQueryChange = onSearchQueryChange,
+                                    onVoiceClick = onTriggerVoice,
+                                    modifier = Modifier
+                                        .weight(0.65f)
+                                        .fillMaxHeight()
+                                )
+
+                                // Right 35%: TVS Ronin Speedometer Cluster & Turn Guidance
                                 Column(
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier
+                                        .weight(0.35f)
+                                        .fillMaxHeight(),
                                     verticalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    // Top 60%: Responsive Embedded Navigation Map
-                                    NavigationMapView(
-                                        currentLocation = speedUiState.lastLocation,
-                                        headingDegrees = speedUiState.headingDegrees,
-                                        uiState = navUiState,
-                                        onStartNavigation = onStartNavigation,
-                                        onCancelNavigation = onCancelNavigation,
-                                        modifier = Modifier
-                                            .weight(0.60f)
-                                            .fillMaxWidth()
-                                    )
-
-                                    // Bottom 40%: Split Gauge and Compact Media
-                                    Row(
-                                        modifier = Modifier
-                                            .weight(0.40f)
-                                            .fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        SpeedometerGauge(
-                                            speedKmH = Units.speed(speedUiState.currentSpeedKmH, settings.speedUnit),
-                                            headingDegrees = speedUiState.headingDegrees,
-                                            headingCardinal = speedUiState.headingCardinal,
-                                            tripDistanceKm = Units.distance(speedUiState.tripDistanceKm, settings.speedUnit),
-                                            rideDurationSeconds = speedUiState.rideDurationSeconds,
-                                            hasGpsFix = speedUiState.hasGpsFix,
+                                    // Turn Guidance Card (If Navigating)
+                                    if (navUiState.isNavigating) {
+                                        TurnCard(
+                                            direction = navUiState.nextTurnDirection,
+                                            distanceToTurn = navUiState.distanceToNextTurn,
+                                            roadName = navUiState.nextRoadName,
+                                            remainingKm = navUiState.remainingDistanceKm,
+                                            eta = navUiState.estimatedArrivalTime,
                                             speedUnit = settings.speedUnit,
-                                            maxSpeedKmH = Units.speed(speedUiState.maxSpeedKmH, settings.speedUnit),
-                                            averageSpeedKmH = Units.speed(speedUiState.averageSpeedKmH, settings.speedUnit),
-                                            clusterStyle = settings.clusterStyle,
-                                            modifier = Modifier
-                                                .weight(0.55f)
-                                                .fillMaxHeight()
-                                        )
-
-                                        MediaPlayerCompactCard(
-                                            uiState = mediaUiState,
-                                            onTogglePlayPause = onTogglePlayPause,
-                                            onNext = onNextTrack,
-                                            onPrevious = onPreviousTrack,
-                                            onOpenFullScreen = { activeTab = MotoDriveTab.MEDIA },
-                                            modifier = Modifier
-                                                .weight(0.45f)
-                                                .fillMaxHeight()
+                                            isNavigating = true
                                         )
                                     }
-                                }
-                            } else {
-                                // Landscape Motorcycle Cockpit Layout (70% Map + 30% Instrument Panel)
-                                Row(
-                                    modifier = Modifier.fillMaxSize(),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                ) {
-                                    NavigationMapView(
-                                        currentLocation = speedUiState.lastLocation,
-                                        headingDegrees = speedUiState.headingDegrees,
-                                        uiState = navUiState,
-                                        onStartNavigation = onStartNavigation,
-                                        onCancelNavigation = onCancelNavigation,
-                                        modifier = Modifier
-                                            .weight(0.70f)
-                                            .fillMaxHeight()
+
+                                    // Cinematic Speedometer Gauge
+                                    SpeedGauge(
+                                        speed = Units.speed(speedUiState.currentSpeedKmH, settings.speedUnit),
+                                        speedUnit = settings.speedUnit,
+                                        clusterStyle = settings.clusterStyle,
+                                        speedLimitKmH = navUiState.speedLimitKmH,
+                                        tripDistance = Units.distance(speedUiState.tripDistanceKm, settings.speedUnit),
+                                        averageSpeed = Units.speed(speedUiState.averageSpeedKmH, settings.speedUnit),
+                                        modifier = Modifier.weight(1f)
                                     )
 
-                                    Column(
-                                        modifier = Modifier
-                                            .weight(0.30f)
-                                            .fillMaxHeight(),
-                                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        SpeedometerGauge(
-                                            speedKmH = Units.speed(speedUiState.currentSpeedKmH, settings.speedUnit),
-                                            headingDegrees = speedUiState.headingDegrees,
-                                            headingCardinal = speedUiState.headingCardinal,
-                                            tripDistanceKm = Units.distance(speedUiState.tripDistanceKm, settings.speedUnit),
-                                            rideDurationSeconds = speedUiState.rideDurationSeconds,
-                                            hasGpsFix = speedUiState.hasGpsFix,
-                                            speedUnit = settings.speedUnit,
-                                            maxSpeedKmH = Units.speed(speedUiState.maxSpeedKmH, settings.speedUnit),
-                                            averageSpeedKmH = Units.speed(speedUiState.averageSpeedKmH, settings.speedUnit),
-                                            clusterStyle = settings.clusterStyle,
-                                            modifier = Modifier.weight(1f)
-                                        )
-
+                                    // Compact Media Player (Hidden when moving to maintain motorcycle focus)
+                                    if (!isMoving && !navUiState.isNavigating) {
                                         MediaPlayerCompactCard(
                                             uiState = if (iphoneBleState.isConnected && iphoneTrack.title != "No Track Playing") {
                                                 mediaUiState.copy(
@@ -252,82 +223,82 @@ fun DashboardMainScreen(
                                 }
                             }
                         }
-                    }
 
-                    MotoDriveTab.MEDIA -> {
-                        FullScreenMediaScreen(
-                            uiState = if (iphoneBleState.isConnected && iphoneTrack.title != "No Track Playing") {
-                                mediaUiState.copy(
-                                    title = iphoneTrack.title,
-                                    artist = iphoneTrack.artist,
-                                    album = iphoneTrack.album
-                                )
-                            } else {
-                                mediaUiState
-                            },
-                            onTogglePlayPause = onTogglePlayPause,
-                            onNext = onNextTrack,
-                            onPrevious = onPreviousTrack,
-                            onSeekTo = onSeekTrack,
-                            onLaunchMusicApp = onLaunchMusicApp
-                        )
-                    }
+                        MotoDriveTab.MEDIA -> {
+                            FullScreenMediaScreen(
+                                uiState = if (iphoneBleState.isConnected && iphoneTrack.title != "No Track Playing") {
+                                    mediaUiState.copy(
+                                        title = iphoneTrack.title,
+                                        artist = iphoneTrack.artist,
+                                        album = iphoneTrack.album
+                                    )
+                                } else {
+                                    mediaUiState
+                                },
+                                onTogglePlayPause = onTogglePlayPause,
+                                onNext = onNextTrack,
+                                onPrevious = onPreviousTrack,
+                                onSeekTo = onSeekTrack,
+                                onLaunchMusicApp = onLaunchMusicApp
+                            )
+                        }
 
-                    MotoDriveTab.ALERTS -> {
-                        IphoneNotificationCenterScreen(
-                            connectionState = iphoneBleState,
-                            notifications = iphoneNotifications,
-                            showPreviews = settings.showNotificationPreviews,
-                            onConnectIphone = onConnectIphone,
-                            onDismissNotification = onDismissIphoneNotification,
-                            onClearAll = onClearAllIphoneNotifications
-                        )
-                    }
+                        MotoDriveTab.ALERTS -> {
+                            IphoneNotificationCenterScreen(
+                                connectionState = iphoneBleState,
+                                notifications = iphoneNotifications,
+                                showPreviews = settings.showNotificationPreviews,
+                                onConnectIphone = onConnectIphone,
+                                onDismissNotification = onDismissIphoneNotification,
+                                onClearAll = onClearAllIphoneNotifications
+                            )
+                        }
 
-                    MotoDriveTab.PHONE -> {
-                        PhoneConnectivityScreen(
-                            uiState = connectivityUiState,
-                            onQuickCall = onQuickCall
-                        )
-                    }
+                        MotoDriveTab.PHONE -> {
+                            PhoneConnectivityScreen(
+                                uiState = connectivityUiState,
+                                onQuickCall = onQuickCall
+                            )
+                        }
 
-                    MotoDriveTab.APPS -> {
-                        AppLauncherScreen(
-                            onOpenNavigation = { activeTab = MotoDriveTab.NAVIGATION }
-                        )
-                    }
+                        MotoDriveTab.APPS -> {
+                            AppLauncherScreen(
+                                onOpenNavigation = { activeTab = MotoDriveTab.NAVIGATION }
+                            )
+                        }
 
-                    MotoDriveTab.TRIP -> {
-                        TripComputerScreen(
-                            speedUiState = speedUiState,
-                            isRidingMode = isRidingMode,
-                            onResetTrip = onResetTrip
-                        )
-                    }
+                        MotoDriveTab.TRIP -> {
+                            TripComputerScreen(
+                                speedUiState = speedUiState,
+                                isRidingMode = isRidingMode,
+                                onResetTrip = onResetTrip
+                            )
+                        }
 
-                    MotoDriveTab.SETTINGS -> {
-                        SettingsScreen(
-                            settings = settings,
-                            onSpeedUnitChange = onSpeedUnitChange,
-                            onTempUnitChange = onTempUnitChange,
-                            on24HourChange = on24HourChange,
-                            onKeepScreenOnChange = onKeepScreenOnChange,
-                            onBtAutoLaunchChange = onBtAutoLaunchChange,
-                            onClusterStyleChange = onClusterStyleChange,
-                            onThemeStyleChange = onThemeStyleChange,
-                            onIphoneNotificationsChange = onIphoneNotificationsChange,
-                            onShowNotificationPreviewsChange = onShowNotificationPreviewsChange,
-                            onNotifyIncomingCallsChange = onNotifyIncomingCallsChange,
-                            onNotifyWhatsAppChange = onNotifyWhatsAppChange,
-                            onNotifyInstagramChange = onNotifyInstagramChange,
-                            onNotifySmsChange = onNotifySmsChange,
-                            onNotifySnapchatChange = onNotifySnapchatChange
-                        )
+                        MotoDriveTab.SETTINGS -> {
+                            SettingsScreen(
+                                settings = settings,
+                                onSpeedUnitChange = onSpeedUnitChange,
+                                onTempUnitChange = onTempUnitChange,
+                                on24HourChange = on24HourChange,
+                                onKeepScreenOnChange = onKeepScreenOnChange,
+                                onBtAutoLaunchChange = onBtAutoLaunchChange,
+                                onClusterStyleChange = onClusterStyleChange,
+                                onThemeStyleChange = onThemeStyleChange,
+                                onIphoneNotificationsChange = onIphoneNotificationsChange,
+                                onShowNotificationPreviewsChange = onShowNotificationPreviewsChange,
+                                onNotifyIncomingCallsChange = onNotifyIncomingCallsChange,
+                                onNotifyWhatsAppChange = onNotifyWhatsAppChange,
+                                onNotifyInstagramChange = onNotifyInstagramChange,
+                                onNotifySmsChange = onNotifySmsChange,
+                                onNotifySnapchatChange = onNotifySnapchatChange
+                            )
+                        }
                     }
                 }
             }
 
-            // BOTTOM QUICK ACCESS NAVIGATION BAR
+            // MINIMAL COCKPIT BOTTOM NAVIGATION BAR
             MSportBottomBar(
                 currentTab = activeTab,
                 onTabSelected = { activeTab = it },
@@ -338,7 +309,7 @@ fun DashboardMainScreen(
             )
         }
 
-        // MOTODRIVE VOICE ASSISTANT POPUP OVERLAY
+        // TVS RONIN VOICE ASSISTANT POPUP OVERLAY
         AnimatedVisibility(
             visible = voiceUiState.isListening,
             enter = fadeIn(),
@@ -348,14 +319,13 @@ fun DashboardMainScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(colors.background.copy(alpha = 0.8f))
+                    .background(Color(0xCC000000))
                     .clickable { onStopVoice() },
                 contentAlignment = Alignment.Center
             ) {
-                GlowCard(
+                GlassCard(
                     modifier = Modifier.widthIn(min = 340.dp, max = 460.dp),
-                    shape = RoundedCornerShape(20.dp),
-                    backgroundColor = colors.cardElevated,
+                    cornerRadius = 24.dp,
                     borderColor = colors.electricAccent,
                     borderWidth = 2.dp
                 ) {
@@ -385,12 +355,12 @@ fun DashboardMainScreen(
                             style = MotoDriveTypography.labelLarge.copy(
                                 color = colors.electricAccent,
                                 fontWeight = FontWeight.Bold,
-                                letterSpacing = 1.sp
+                                letterSpacing = 2.sp
                             )
                         )
 
                         Text(
-                            text = voiceUiState.spokenText.ifBlank { "Listening for motorcycle command..." },
+                            text = voiceUiState.spokenText.ifBlank { "Speak destination or command..." },
                             style = MotoDriveTypography.titleLarge.copy(fontSize = 18.sp),
                             color = colors.primaryText
                         )

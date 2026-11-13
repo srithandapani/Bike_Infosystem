@@ -2,16 +2,17 @@ plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("com.google.android.libraries.mapsplatform.secrets-gradle-plugin")
 }
 
 android {
     namespace = "com.motodrive.tft"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.motodrive.tft"
         minSdk = 26
-        targetSdk = 34
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0.0-msport"
 
@@ -37,6 +38,7 @@ android {
     }
 
     compileOptions {
+        isCoreLibraryDesugaringEnabled = true
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
@@ -47,6 +49,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     lint {
@@ -62,6 +65,8 @@ android {
 }
 
 dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+
     val composeBom = platform("androidx.compose:compose-bom:2024.06.00")
     implementation(composeBom)
     androidTestImplementation(composeBom)
@@ -84,12 +89,14 @@ dependencies {
     // AndroidX Media for MediaSession integration
     implementation("androidx.media:media:1.7.0")
 
-    // Google Maps Platform SDK & Location Services
-    implementation("com.google.android.gms:play-services-maps:18.2.0")
-    implementation("com.google.android.gms:play-services-location:21.3.0")
-
-    // OSMDroid for embedded offline/online map canvas
-    implementation("org.osmdroid:osmdroid-android:6.1.18")
+    // Google Maps Platform Navigation SDK & Places SDK
+    implementation("com.google.android.libraries.navigation:navigation:7.0.0")
+    implementation("com.google.android.libraries.places:places:3.5.0") {
+        exclude(group = "com.google.android.gms", module = "play-services-maps")
+    }
+    implementation("com.google.android.gms:play-services-location:21.3.0") {
+        exclude(group = "com.google.android.gms", module = "play-services-maps")
+    }
 
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")

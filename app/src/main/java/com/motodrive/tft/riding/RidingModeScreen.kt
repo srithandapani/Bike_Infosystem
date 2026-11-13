@@ -1,10 +1,7 @@
 package com.motodrive.tft.riding
 
-import com.motodrive.tft.core.util.Units
-
 import android.location.Location
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -20,12 +17,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.motodrive.tft.core.components.GlowCard
+import com.motodrive.tft.core.components.GlassCard
 import com.motodrive.tft.core.theme.*
+import com.motodrive.tft.core.util.Units
 import com.motodrive.tft.media.MediaUiState
 import com.motodrive.tft.navigation.NavigationMapView
 import com.motodrive.tft.navigation.NavigationUiState
-import com.motodrive.tft.navigation.TurnDirection
 import com.motodrive.tft.speedometer.SpeedometerUiState
 
 @Composable
@@ -41,27 +38,29 @@ fun RidingModeScreen(
     onCancelNavigation: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(PrimaryBackground)
+            .background(colors.background)
     ) {
-        // 1. Full-Screen High-Contrast Navigation Map Background
+        // 1. Full-Screen Embedded Navigation Map View
         NavigationMapView(
             currentLocation = currentLocation,
-            headingDegrees = speedUiState.headingDegrees,
+            currentSpeedKmH = speedUiState.currentSpeedKmH,
             uiState = navUiState,
             onStartNavigation = onStartNavigation,
             onCancelNavigation = onCancelNavigation,
             modifier = Modifier.fillMaxSize()
         )
 
-        // 2. Top Status Bar Overlay (Dark Translucent Bar)
+        // 2. Top Riding Status Banner
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .background(PrimaryBackground.copy(alpha = 0.85f))
+                .background(Color(0xCC050508))
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -77,36 +76,35 @@ fun RidingModeScreen(
                         .background(SuccessGreen)
                 )
                 Text(
-                    text = "ACTIVE RIDING MODE",
+                    text = "TVS RONIN RIDING MODE",
                     style = MotoDriveTypography.labelLarge.copy(color = SuccessGreen, fontWeight = FontWeight.ExtraBold)
                 )
             }
 
-            // Quick Floating Exit Riding Mode Button
+            // Exit Riding Mode Pill (>= 56dp touch friendly)
             Button(
                 onClick = onExitRidingMode,
-                colors = ButtonDefaults.buttonColors(containerColor = CardBackgroundElevated),
-                border = androidx.compose.foundation.BorderStroke(1.dp, ElectricBlue),
-                shape = RoundedCornerShape(8.dp),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                modifier = Modifier.height(32.dp)
+                colors = ButtonDefaults.buttonColors(containerColor = colors.cardElevated),
+                border = androidx.compose.foundation.BorderStroke(1.dp, colors.electricAccent),
+                shape = RoundedCornerShape(12.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                modifier = Modifier.height(36.dp)
             ) {
-                Icon(Icons.Default.PauseCircle, contentDescription = null, tint = ElectricBlue, modifier = Modifier.size(16.dp))
+                Icon(Icons.Default.PauseCircle, contentDescription = null, tint = colors.electricAccent, modifier = Modifier.size(16.dp))
                 Spacer(modifier = Modifier.width(6.dp))
-                Text("SWITCH TO PARKED", style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold), color = PrimaryText)
+                Text("PARKED VIEW", style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold), color = colors.primaryText)
             }
         }
 
-        // 3. Compact Floating Speedometer Overlay (Bottom-Left)
-        GlowCard(
+        // 3. Compact Floating Speedometer (Bottom-Left)
+        GlassCard(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(16.dp)
                 .width(220.dp),
-            shape = RoundedCornerShape(16.dp),
-            backgroundColor = CardBackgroundElevated.copy(alpha = 0.95f),
-            borderColor = ElectricBlue,
-            borderWidth = 2.dp
+            cornerRadius = 20.dp,
+            borderColor = colors.electricAccent,
+            borderWidth = 1.5.dp
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
@@ -120,12 +118,12 @@ fun RidingModeScreen(
                 ) {
                     Text(
                         text = "GPS SPEED",
-                        style = MotoDriveTypography.labelSmall.copy(color = ElectricBlue, fontWeight = FontWeight.Bold)
+                        style = MotoDriveTypography.labelSmall.copy(color = colors.electricAccent, fontWeight = FontWeight.Bold)
                     )
                     Text(
                         text = "${speedUiState.headingCardinal} ${speedUiState.headingDegrees.toInt()}°",
                         style = MotoDriveTypography.labelSmall,
-                        color = PrimaryText
+                        color = colors.primaryText
                     )
                 }
 
@@ -135,25 +133,23 @@ fun RidingModeScreen(
                         fontSize = 58.sp,
                         fontWeight = FontWeight.ExtraBold
                     ),
-                    color = PrimaryText
+                    color = colors.primaryText
                 )
 
                 Text(
                     text = speedUiState.speedUnit.uppercase(),
-                    style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue, fontWeight = FontWeight.Bold)
+                    style = MotoDriveTypography.labelLarge.copy(color = colors.electricAccent, fontWeight = FontWeight.Bold)
                 )
             }
         }
 
         // 4. Floating Quick Media Control Pill (Bottom-Right)
-        GlowCard(
+        GlassCard(
             modifier = Modifier
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
                 .widthIn(max = 260.dp),
-            shape = RoundedCornerShape(24.dp),
-            backgroundColor = CardBackgroundElevated.copy(alpha = 0.92f),
-            borderColor = ThinBorderColor
+            cornerRadius = 24.dp
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
@@ -163,7 +159,7 @@ fun RidingModeScreen(
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = ElectricBlue,
+                    tint = colors.electricAccent,
                     modifier = Modifier.size(20.dp)
                 )
 
@@ -171,41 +167,40 @@ fun RidingModeScreen(
                     Text(
                         text = mediaUiState.title,
                         style = MotoDriveTypography.titleLarge.copy(fontSize = 12.sp, fontWeight = FontWeight.Bold),
-                        color = PrimaryText,
+                        color = colors.primaryText,
                         maxLines = 1
                     )
                     Text(
                         text = mediaUiState.artist,
                         style = MotoDriveTypography.bodyMedium.copy(fontSize = 10.sp),
-                        color = SecondaryText,
+                        color = colors.secondaryText,
                         maxLines = 1
                     )
                 }
 
                 Box(
                     modifier = Modifier
-                        .size(32.dp)
+                        .size(36.dp)
                         .clip(CircleShape)
-                        .background(PrimaryBlue)
+                        .background(colors.primaryAccent)
                         .clickable { onTogglePlayPause() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (mediaUiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = PrimaryText,
-                        modifier = Modifier.size(18.dp)
+                        tint = colors.primaryText,
+                        modifier = Modifier.size(20.dp)
                     )
                 }
 
                 IconButton(
                     onClick = onNextTrack,
-                    modifier = Modifier.size(32.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
-                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = PrimaryText, modifier = Modifier.size(20.dp))
+                    Icon(Icons.Default.SkipNext, contentDescription = "Next", tint = colors.primaryText, modifier = Modifier.size(22.dp))
                 }
             }
         }
     }
 }
-

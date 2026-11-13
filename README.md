@@ -1,7 +1,7 @@
 # TVS RONIN 225 – Smart Motorcycle Infotainment System
 ### Premium Motorcycle Cockpit & TFT Dashboard for Realme C83
 
-![TVS Ronin Dashboard](screenshots/tvs_ronin_home.png)
+![TVS Ronin Dashboard](screenshots/tvs_ronin_cockpit_realme.png)
 
 A fully functional, automotive-grade Android motorcycle infotainment operating system engineered specifically for the **TVS Ronin 225** mounted on a **Realme C83** smartphone. Built natively using **Kotlin**, **Jetpack Compose**, **Material 3**, and **MVVM architecture**.
 
@@ -9,11 +9,22 @@ A fully functional, automotive-grade Android motorcycle infotainment operating s
 
 ## 🏍️ Key Highlights & Features
 
-### 1. 100% Embedded In-App Navigation
-- **Zero App Switching**: Navigation runs entirely inside the application. No redirects to external browser windows, no popups, and no external app intents.
-- **Interactive High-Contrast Vector Map**: Responsive embedded map canvas optimized for landscape handlebar viewing with full gesture control (pan, pinch-to-zoom, re-center).
-- **Route Tracking & Turn HUD**: Real-time GPS location tracking, custom directional vehicle indicator, upcoming turn instruction, remaining distance, and ETA.
-- **Motorcycle Waypoint Presets**: One-tap navigation to **Fuel Station**, **Motorcycle Service**, **Home**, **Work**, and scenic riding routes.
+### 1. 100% Embedded In-App Navigation (Google Navigation SDK & Places SDK)
+- **Zero App Switching**: Navigation runs entirely inside the application via Google Navigation SDK for Android (`navigation:7.0.0`). No redirects to external browser windows, no popups, and no external app intents.
+- **Native Two-Wheeler Routing**: Supports `RoutingOptions.TravelMode.TWO_WHEELER` with motorcycle-specific paths, avoidance of two-wheeler restricted expressways in India, and live motorcycle traffic ETAs.
+- **Cinematic AMOLED Night Canvas**: Forced night mode (`ForceNightMode.FORCE_NIGHT`) with high-contrast tilted rider perspective.
+- **Real-Time Turn Guidance HUD**: Live maneuver indicators (`TurnCard`), dynamic proximity pulsing under 200m, remaining distance, ETA, current road, and posted speed limit alerts.
+- **Places Autocomplete & Nearby Search**: Google Places SDK integration for real-time destination search, one-tap Petrol Pumps ("Fuel Station"), TVS Authorized Motorcycle Repair ("Motorcycle Service"), and saved Home/Work locations.
+- **Foreground Guidance Service**: Background-safe turn-by-turn guidance via `GoogleNavigationService` with ongoing notification.
+- **Triple Fallback Architecture**: Primary Google Navigation SDK -> Fallback B (Routes API + Maps SDK) -> Fallback C (Google Maps Intent `mode=l`).
+- See [docs/GOOGLE_CLOUD_SETUP.md](docs/GOOGLE_CLOUD_SETUP.md) for Google Cloud setup instructions.
+
+### 2. Cinematic Cockpit Interface (Landscape 65/35 Layout)
+- **Landscape-Optimized Cockpit**: 65% interactive map canvas on the left, 35% telemetry and speed gauge cluster on the right.
+- **Ronin AMOLED Dark Visual Language**: Pure `#000000`/`#050508` backgrounds, TVS Ronin signature neon purple (`#A855F7`), racing red (`#EF4444`), and frosted glassmorphism (`GlassCard`).
+- **Glove-Friendly Touch Targets**: All interactive elements $\ge 56\text{dp}$ with generous margins.
+- **Riding Mode Safety Lockout**: Non-essential cards auto-hide above 5 km/h, keyboard search locks out to eliminate riding distraction, with quick voice search fallback.
+- **Startup Needle Sweep & Motion**: Analog needle sweep animation on cluster startup with spring physics easing.
 
 ### 2. Multi-Mode GPS Speedometer Cluster
 Switchable in real-time from Settings to match your riding preference:

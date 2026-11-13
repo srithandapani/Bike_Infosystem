@@ -1,8 +1,7 @@
 package com.motodrive.tft
 
 import android.app.Application
-import org.osmdroid.config.Configuration
-import java.io.File
+import com.google.android.libraries.places.api.Places
 
 class MotoDriveApp : Application() {
 
@@ -10,14 +9,12 @@ class MotoDriveApp : Application() {
         super.onCreate()
         instance = this
 
-        // Initialize OSMDroid for offline/online motorcycle navigation map
+        // Initialize Google Places SDK with API key from BuildConfig (injected via Secrets Gradle Plugin)
         try {
-            val osmConfig = Configuration.getInstance()
-            osmConfig.userAgentValue = "TVSRoninTFT/1.0 (Realme C83 Motorcycle Infotainment)"
-            val basePath = File(cacheDir, "osmdroid")
-            osmConfig.osmdroidBasePath = basePath
-            osmConfig.osmdroidTileCache = File(basePath, "tiles")
-            osmConfig.load(this, getSharedPreferences("osmdroid_prefs", MODE_PRIVATE))
+            val apiKey = BuildConfig.MAPS_API_KEY
+            if (apiKey.isNotBlank() && !Places.isInitialized()) {
+                Places.initialize(applicationContext, apiKey)
+            }
         } catch (e: Exception) {
             e.printStackTrace()
         }
@@ -28,4 +25,3 @@ class MotoDriveApp : Application() {
             private set
     }
 }
-

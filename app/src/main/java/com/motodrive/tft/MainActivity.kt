@@ -1,12 +1,10 @@
 package com.motodrive.tft
 
 import android.Manifest
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -21,6 +19,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -38,7 +37,7 @@ import com.motodrive.tft.voice.MotoDriveVoiceAssistant
 import com.motodrive.tft.voice.VoiceCommandResult
 import com.motodrive.tft.weather.WeatherViewModel
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
 
     private val speedometerViewModel: SpeedometerViewModel by viewModels()
     private val navigationViewModel: NavigationViewModel by viewModels()
@@ -59,6 +58,7 @@ class MainActivity : ComponentActivity() {
         val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         if (fineLocationGranted) {
             speedometerViewModel.startLocationUpdates()
+            navigationViewModel.initNavigator(this@MainActivity)
         }
         connectivityViewModel.refreshBluetoothState()
         appleBleManager.connectToBondedIphone()
@@ -79,6 +79,9 @@ class MainActivity : ComponentActivity() {
         // Request necessary automotive permissions gracefully
         checkAndRequestPermissions()
 
+        // Initialize Google Navigation SDK
+        navigationViewModel.initNavigator(this)
+
         // Setup Voice Command Listener
         voiceAssistant.setCommandListener { command ->
             handleVoiceCommand(command)
@@ -89,7 +92,7 @@ class MainActivity : ComponentActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 speedometerViewModel.uiState.collect { state ->
                     state.lastLocation?.let { loc ->
-                        navigationViewModel.updateLocationForNavigation(loc)
+                        navigationViewModel.updateCurrentLocation(loc)
                     }
                 }
             }
@@ -177,10 +180,13 @@ class MainActivity : ComponentActivity() {
                         },
                         onSeekTrack = { mediaViewModel.seekTo(it) },
                         onLaunchMusicApp = { mediaViewModel.launchMusicApp(it) },
-                        onStartNavigation = { navigationViewModel.startNavigation(it, speedUiState.lastLocation) },
+                        onStartNavigation = { navigationViewModel.startNavigation(it) },
+                        onStartPlaceNavigation = { navigationViewModel.startNavigationToPlace(it) },
                         onCancelNavigation = { navigationViewModel.cancelNavigation() },
+                        onSaveLocationAs = { navigationViewModel.saveCurrentLocationAs(it) },
+                        onSearchQueryChange = { navigationViewModel.updateSearchQuery(it) },
                         onLaunchGoogleMaps = { destination ->
-                            navigationViewModel.startNavigation(destination, speedUiState.lastLocation)
+                            navigationViewModel.startNavigation(destination)
                         },
                         onResetTrip = { speedometerViewModel.resetTrip() },
                         onQuickCall = { connectivityViewModel.makeQuickCall(it) },
@@ -221,7 +227,7 @@ class MainActivity : ComponentActivity() {
         when (command) {
             is VoiceCommandResult.OpenNavigation -> {
                 val dest = if (!command.destination.isNullOrEmpty()) command.destination else "Home"
-                navigationViewModel.startNavigation(dest, speedometerViewModel.uiState.value.lastLocation)
+                navigationViewModel.startNavigation(dest)
             }
             is VoiceCommandResult.PlayMusic -> {
                 if (appleBleManager.connectionState.value.isConnected) {
@@ -264,6 +270,10 @@ class MainActivity : ComponentActivity() {
             Manifest.permission.RECORD_AUDIO
         )
 
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             permissionsToRequest.add(Manifest.permission.BLUETOOTH_CONNECT)
             permissionsToRequest.add(Manifest.permission.BLUETOOTH_SCAN)
@@ -279,6 +289,7 @@ class MainActivity : ComponentActivity() {
             speedometerViewModel.startLocationUpdates()
             connectivityViewModel.refreshBluetoothState()
             appleBleManager.connectToBondedIphone()
+            navigationViewModel.initNavigator(this)
         }
     }
 
