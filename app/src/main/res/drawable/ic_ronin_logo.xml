@@ -1,0 +1,49 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- Dark Cockpit Outer Bezel -->
+    <path
+        android:fillColor="#111B29"
+        android:pathData="M 54,4 A 50,50 0 1,1 53.9,4 Z" />
+
+    <!-- Outer Illuminated Cyan/Electric Blue Halo Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#009FE3"
+        android:strokeWidth="3.5"
+        android:pathData="M 54,8 A 46,46 0 1,1 53.9,8 Z" />
+
+    <!-- Inner Instrument Ring -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#162337"
+        android:strokeWidth="2"
+        android:pathData="M 54,14 A 40,40 0 1,1 53.9,14 Z" />
+
+    <!-- TVS RONIN SIGNATURE 'T' DRL LIGHT EMBLEM -->
+    <!-- Top Horizontal Light Bar of the 'T' -->
+    <path
+        android:fillColor="#36B9FF"
+        android:pathData="M 28,34 L 80,34 C 83,34 85,36 84,39 L 81,44 C 80,46 78,47 75,47 L 61,47 L 61,74 C 61,77 59,79 56,79 L 52,79 C 49,79 47,77 47,74 L 47,47 L 33,47 C 30,47 28,46 27,44 L 24,39 C 23,36 25,34 28,34 Z" />
+
+    <!-- Center Illuminated Core of the 'T' in High-Contrast Crisp White -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M 32,38 L 76,38 L 73,43 L 57,43 L 57,72 L 51,72 L 51,43 L 35,43 Z" />
+
+    <!-- M Sport Tri-Color Precision Stripes at base -->
+    <path
+        android:fillColor="#36B9FF"
+        android:pathData="M 43,87 L 48,87 L 46,84 Z" />
+    <path
+        android:fillColor="#00458C"
+        android:pathData="M 50,87 L 55,87 L 53,84 Z" />
+    <path
+        android:fillColor="#E2231A"
+        android:pathData="M 57,87 L 62,87 L 60,84 Z" />
+
+</vector>
+

@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">TVS RONIN</string>
+    <string name="app_edition">TFT CONNECT</string>
+    <string name="disclaimer_gps">SUPPLEMENTARY GPS SPEEDOMETER - DO NOT REPLACE OEM SPEEDOMETER</string>
+    <!-- Google Maps Platform API Key (Configurable for Google Cloud Maps SDK) -->
+    <string name="google_maps_key" translatable="false">AIzaSyDemoKeyTvsRoninInfotainmentMap</string>
+</resources>

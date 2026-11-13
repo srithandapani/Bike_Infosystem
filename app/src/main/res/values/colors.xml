@@ -1,0 +1,15 @@
+<resources>
+    <color name="primary_bg">#05070B</color>
+    <color name="secondary_bg">#0B111A</color>
+    <color name="panel_bg">#111B29</color>
+    <color name="card_bg">#162337</color>
+    <color name="primary_blue">#009FE3</color>
+    <color name="electric_blue">#36B9FF</color>
+    <color name="secondary_blue">#1769AA</color>
+    <color name="primary_text">#FFFFFF</color>
+    <color name="secondary_text">#94A3B8</color>
+    <color name="success">#2ECC71</color>
+    <color name="warning">#FFB547</color>
+    <color name="alert">#FF5252</color>
+</resources>
+
