@@ -121,9 +121,9 @@ fun NavigationMapView(
         destMarkerRef = null
 
         if (uiState.isNavigating && uiState.routePoints.isNotEmpty()) {
-            // Draw glowing TVS Ronin Neon Purple in-app route polyline
+            // Draw glowing TVS Ronin Racing Red in-app route polyline
             val polyline = Polyline(map).apply {
-                outlinePaint.color = android.graphics.Color.parseColor("#A855F7")
+                outlinePaint.color = android.graphics.Color.parseColor("#FF2A3A")
                 outlinePaint.strokeWidth = 14f
                 outlinePaint.strokeCap = Paint.Cap.ROUND
                 outlinePaint.strokeJoin = Paint.Join.ROUND
@@ -173,14 +173,16 @@ fun NavigationMapView(
                     maxZoomLevel = 20.0
                     controller.setZoom(16.0)
 
-                    // Pure AMOLED Black High-Contrast Filter
+                    // Pure AMOLED Monochrome Dark High-Contrast Filter (No purple tint, high readability)
                     val matrix = ColorMatrix().apply {
-                        set(floatArrayOf(
-                            -0.85f, 0f, 0f, 0f, 230f,
-                            0f, -0.85f, 0f, 0f, 230f,
-                            0f, 0f, -0.85f, 0f, 230f,
+                        setSaturation(0f)
+                        val invert = ColorMatrix(floatArrayOf(
+                            -0.82f, 0f, 0f, 0f, 225f,
+                            0f, -0.82f, 0f, 0f, 225f,
+                            0f, 0f, -0.82f, 0f, 225f,
                             0f, 0f, 0f, 1f, 0f
                         ))
+                        postConcat(invert)
                     }
                     overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(matrix))
 
@@ -247,15 +249,15 @@ fun NavigationMapView(
                 Surface(
                     onClick = onVoiceClick,
                     shape = CircleShape,
-                    color = RoninNeonPurple.copy(alpha = 0.25f),
-                    border = borderStroke(RoninNeonPurple),
+                    color = RoninNeonRed.copy(alpha = 0.25f),
+                    border = borderStroke(RoninNeonRed),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Mic,
                             contentDescription = "Voice",
-                            tint = RoninNeonPurple,
+                            tint = RoninNeonRed,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -274,8 +276,8 @@ fun NavigationMapView(
                         "GAS" -> Color(0xFFF59E0B)
                         "WRENCH" -> Color(0xFF38BDF8)
                         "HOME" -> Color(0xFF34D399)
-                        "WORK" -> Color(0xFFA78BFA)
-                        else -> RoninNeonPurple
+                        "WORK" -> Color(0xFFF87171)
+                        else -> RoninNeonRed
                     }
 
                     Surface(
@@ -374,14 +376,14 @@ fun NavigationMapView(
                         },
                         shape = RoundedCornerShape(12.dp),
                         color = CardBackgroundElevated.copy(alpha = 0.9f),
-                        border = borderStroke(RoninNeonPurple),
+                        border = borderStroke(RoninNeonRed),
                         modifier = Modifier.height(38.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = RoninNeonPurple, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = RoninNeonRed, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("RE-CENTER", style = MotoDriveTypography.labelMedium, color = PrimaryText)
                         }
@@ -405,7 +407,7 @@ fun NavigationMapView(
                         .padding(top = 16.dp),
                     shape = RoundedCornerShape(14.dp),
                     backgroundColor = CardBackgroundElevated,
-                    borderColor = RoninNeonPurple
+                    borderColor = RoninNeonRed
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -418,7 +420,7 @@ fun NavigationMapView(
                         ) {
                             Text(
                                 text = "SEARCH DESTINATION",
-                                style = MotoDriveTypography.labelLarge.copy(color = RoninNeonPurple, fontWeight = FontWeight.Bold)
+                                style = MotoDriveTypography.labelLarge.copy(color = RoninNeonRed, fontWeight = FontWeight.Bold)
                             )
                             IconButton(onClick = { isSearchExpanded = false }, modifier = Modifier.size(28.dp)) {
                                 Icon(Icons.Default.Close, contentDescription = "Close", tint = SecondaryText)
@@ -437,9 +439,9 @@ fun NavigationMapView(
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = PrimaryText,
                                 unfocusedTextColor = PrimaryText,
-                                focusedBorderColor = RoninNeonPurple,
+                                focusedBorderColor = RoninNeonRed,
                                 unfocusedBorderColor = ThinBorderColor,
-                                cursorColor = RoninNeonPurple
+                                cursorColor = RoninNeonRed
                             )
                         )
 
@@ -462,7 +464,7 @@ fun NavigationMapView(
                                             .padding(vertical = 8.dp, horizontal = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.Place, contentDescription = null, tint = RoninNeonPurple, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Place, contentDescription = null, tint = RoninNeonRed, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
                                             Text(result.primaryText, style = MotoDriveTypography.bodyMedium, color = PrimaryText, fontWeight = FontWeight.SemiBold)
@@ -493,7 +495,7 @@ fun NavigationMapView(
                                         isSearchExpanded = false
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = RoninNeonPurple),
+                                colors = ButtonDefaults.buttonColors(containerColor = RoninNeonRed),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
                                 Icon(Icons.Default.Navigation, contentDescription = null, tint = PrimaryText, modifier = Modifier.size(16.dp))

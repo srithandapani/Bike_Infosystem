@@ -21,19 +21,22 @@ data class CockpitColors(
     val secondaryText: Color
 )
 
-val RoninPurpleColors = CockpitColors(
+val RoninRedColors = CockpitColors(
     background = RoninPureBlack,
     panel = RoninPanelBackground,
     card = RoninCardBackground,
     cardElevated = RoninCardElevated,
-    primaryAccent = RoninNeonPurple,
-    electricAccent = RoninElectricViolet,
+    primaryAccent = RoninNeonRed,
+    electricAccent = RoninElectricRed,
     warningRed = RoninRacingRed,
-    border = RoninBorderPurple,
-    borderGlow = RoninGlowPurple,
+    border = RoninBorderRed,
+    borderGlow = RoninGlowRed,
     primaryText = PrimaryText,
-    secondaryText = RoninLavenderText
+    secondaryText = RoninSilverText
 )
+
+// Alias for seamless backward compatibility
+val RoninPurpleColors = RoninRedColors
 
 val MSportBlueColors = CockpitColors(
     background = PrimaryBackground,
@@ -49,7 +52,7 @@ val MSportBlueColors = CockpitColors(
     secondaryText = SecondaryText
 )
 
-val LocalCockpitColors = staticCompositionLocalOf { RoninPurpleColors }
+val LocalCockpitColors = staticCompositionLocalOf { RoninRedColors }
 
 private fun getDarkColorScheme(colors: CockpitColors) = darkColorScheme(
     primary = colors.primaryAccent,
@@ -69,10 +72,13 @@ private fun getDarkColorScheme(colors: CockpitColors) = darkColorScheme(
 
 @Composable
 fun MotoDriveTheme(
-    themeStyle: String = "TVS_RONIN_PURPLE",
+    themeStyle: String = "TVS_RONIN_RED",
     content: @Composable () -> Unit
 ) {
-    val activeColors = if (themeStyle == "M_SPORT_BLUE") MSportBlueColors else RoninPurpleColors
+    val activeColors = when (themeStyle) {
+        "M_SPORT_BLUE" -> MSportBlueColors
+        else -> RoninRedColors
+    }
     val colorScheme = getDarkColorScheme(activeColors)
 
     CompositionLocalProvider(LocalCockpitColors provides activeColors) {

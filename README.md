@@ -21,7 +21,7 @@ A fully functional, automotive-grade Android motorcycle infotainment operating s
 
 ### 2. Cinematic Cockpit Interface (Landscape 65/35 Layout)
 - **Landscape-Optimized Cockpit**: 65% interactive map canvas on the left, 35% telemetry and speed gauge cluster on the right.
-- **Ronin AMOLED Dark Visual Language**: Pure `#000000`/`#050508` backgrounds, TVS Ronin signature neon purple (`#A855F7`), racing red (`#EF4444`), and frosted glassmorphism (`GlassCard`).
+- **Ronin AMOLED Dark Visual Language**: Pure `#000000`/`#050508` backgrounds, TVS Ronin signature racing red (`#FF2A3A` / `#EF4444`), laser red accents, and frosted glassmorphism (`GlassCard`).
 - **Glove-Friendly Touch Targets**: All interactive elements $\ge 56\text{dp}$ with generous margins.
 - **Riding Mode Safety Lockout**: Non-essential cards auto-hide above 5 km/h, keyboard search locks out to eliminate riding distraction, with quick voice search fallback.
 - **Startup Needle Sweep & Motion**: Analog needle sweep animation on cluster startup with spring physics easing.
@@ -29,7 +29,7 @@ A fully functional, automotive-grade Android motorcycle infotainment operating s
 ### 2. Multi-Mode GPS Speedometer Cluster
 Switchable in real-time from Settings to match your riding preference:
 - **Digital Speedometer** *(Default)*: Modern digital velocity gauge with graduated arc markings, high-contrast km/h display, and compass orientation.
-- **Classic Analog Speedometer**: 270° circular gauge dial (0–180 km/h) with sweeping physical illuminated red needle, purple center hub, and digital odometer readout.
+- **Classic Analog Speedometer**: 270° circular gauge dial (0–180 km/h) with sweeping physical illuminated red needle, racing red center hub, and digital odometer readout.
 - **Hybrid Sport Speedometer**: Tachometer arc with digital speed and dedicated **MAX** & **AVG** telemetry badges.
 - **Adaptive Velocity Filter**: $\alpha = 0.65$ during acceleration and braking for instant responsiveness; $\alpha = 0.25$ during cruising to eliminate GPS jitter.
 - **Signal Quality Guard**: Rejects inaccurate fixes (>35 m) and gracefully handles signal loss with smooth speed decay.
@@ -56,9 +56,9 @@ Engineered for riders using an iPhone as their primary pocket phone while using 
 
 ### 4. TVS Ronin Signature Design System
 - **Pure AMOLED Black**: `#030305` background for battery efficiency and maximum glare resistance.
-- **Ronin Neon Purple & Racing Red**: Signature `#A855F7` accents with `#EF4444` alerts.
+- **Ronin Racing Red & Laser Red**: Signature `#FF2A3A` accents with `#EF4444` alerts.
 - **Silver Leaping Horse Emblem**: TVS official brand identity integrated into the top cockpit status bar.
-- **Theme Selection**: Switch between **TVS Ronin Neon Purple** and **M Sport Blue** in Settings.
+- **Theme Selection**: Switch between **TVS Ronin Racing Red** and **M Sport Blue** in Settings.
 
 ---
 

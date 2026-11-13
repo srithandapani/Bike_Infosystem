@@ -35,19 +35,27 @@ val MSportLightBlue = Color(0xFF36B9FF)
 val MSportDarkBlue = Color(0xFF00458C)
 val MSportRed = Color(0xFFE2231A)
 
-// TVS RONIN SIGNATURE PALETTE (AMOLED Pure Black, Neon Purple, Racing Red)
+// TVS RONIN SIGNATURE PALETTE (AMOLED Pure Black, Racing Red, Laser Red)
 val RoninPureBlack = Color(0xFF030305)
 val RoninDeepObsidian = Color(0xFF0A0A0F)
-val RoninPanelBackground = Color(0xFF100E17)
-val RoninCardBackground = Color(0xFF161320)
-val RoninCardElevated = Color(0xFF1E1A2C)
+val RoninPanelBackground = Color(0xFF140D0E)
+val RoninCardBackground = Color(0xFF1A1012)
+val RoninCardElevated = Color(0xFF241618)
 
-val RoninNeonPurple = Color(0xFFA855F7)
-val RoninElectricViolet = Color(0xFFC084FC)
-val RoninDeepPurple = Color(0xFF7E22CE)
+val RoninNeonRed = Color(0xFFFF2A3A)
+val RoninElectricRed = Color(0xFFFF5252)
+val RoninDeepRed = Color(0xFFB91C1C)
 val RoninRacingRed = Color(0xFFEF4444)
 val RoninBrightRed = Color(0xFFFF3B30)
-val RoninBorderPurple = Color(0xFF2A203D)
-val RoninGlowPurple = Color(0x66A855F7)
-val RoninLavenderText = Color(0xFFE9D5FF)
+val RoninBorderRed = Color(0xFF3D1619)
+val RoninGlowRed = Color(0x66FF2A3A)
+val RoninSilverText = Color(0xFFF1F5F9)
+
+// Backward-compatibility aliases for red theme transition
+val RoninNeonPurple = RoninNeonRed
+val RoninElectricViolet = RoninElectricRed
+val RoninDeepPurple = RoninDeepRed
+val RoninBorderPurple = RoninBorderRed
+val RoninGlowPurple = RoninGlowRed
+val RoninLavenderText = RoninSilverText
 

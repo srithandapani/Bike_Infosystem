@@ -101,7 +101,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Dashboard Theme Palette (TVS Ronin Neon Purple vs M Sport Blue)
+            // Dashboard Theme Palette (TVS Ronin Racing Red vs M Sport Blue)
             GlowCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.card,
@@ -123,11 +123,11 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         FilterChip(
-                            selected = settings.themeStyle == "TVS_RONIN_PURPLE",
-                            onClick = { onThemeStyleChange("TVS_RONIN_PURPLE") },
-                            label = { Text("TVS RONIN PURPLE", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                            selected = settings.themeStyle == "TVS_RONIN_RED" || settings.themeStyle == "TVS_RONIN_PURPLE",
+                            onClick = { onThemeStyleChange("TVS_RONIN_RED") },
+                            label = { Text("TVS RONIN RACING RED", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = RoninNeonPurple,
+                                selectedContainerColor = RoninNeonRed,
                                 selectedLabelColor = PrimaryText,
                                 containerColor = colors.cardElevated,
                                 labelColor = colors.secondaryText
