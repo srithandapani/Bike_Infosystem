@@ -125,90 +125,100 @@ fun SpeedGauge(
                     .fillMaxWidth(),
                 contentAlignment = Alignment.Center
             ) {
-                // Arc Gauge Background & Active Sweep Canvas
-                Canvas(modifier = Modifier.size(220.dp)) {
-                    val canvasWidth = size.width
-                    val strokeWidthPx = 14.dp.toPx()
-                    val arcSize = Size(canvasWidth - strokeWidthPx, canvasWidth - strokeWidthPx)
-                    val arcOffset = Offset(strokeWidthPx / 2f, strokeWidthPx / 2f)
-
-                    val startAngle = 135f
-                    val sweepAngle = 270f
-
-                    // 1. Inactive Track
-                    drawArc(
-                        color = colors.border.copy(alpha = 0.35f),
-                        startAngle = startAngle,
-                        sweepAngle = sweepAngle,
-                        useCenter = false,
-                        topLeft = arcOffset,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                if (clusterStyle == "ANALOG") {
+                    com.motodrive.tft.speedometer.AnalogGaugeCanvas(
+                        animatedSpeed = animatedSpeed,
+                        maxGaugeSpeed = maxSpeed,
+                        speedUnit = speedUnit,
+                        hasGpsFix = true,
+                        colors = colors
                     )
+                } else {
+                    // Arc Gauge Background & Active Sweep Canvas
+                    Canvas(modifier = Modifier.size(220.dp)) {
+                        val canvasWidth = size.width
+                        val strokeWidthPx = 14.dp.toPx()
+                        val arcSize = Size(canvasWidth - strokeWidthPx, canvasWidth - strokeWidthPx)
+                        val arcOffset = Offset(strokeWidthPx / 2f, strokeWidthPx / 2f)
 
-                    // 2. Active Glowing Gradient Sweep
-                    val activeBrush = Brush.sweepGradient(
-                        0.0f to colors.primaryAccent,
-                        0.75f to colors.electricAccent,
-                        1.0f to colors.warningRed
-                    )
-                    drawArc(
-                        brush = activeBrush,
-                        startAngle = startAngle,
-                        sweepAngle = sweepAngle * sweepRatio,
-                        useCenter = false,
-                        topLeft = arcOffset,
-                        size = arcSize,
-                        style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
-                    )
+                        val startAngle = 135f
+                        val sweepAngle = 270f
 
-                    // 3. Analog Needle (If Analog or Hybrid Style)
-                    if (clusterStyle == "ANALOG" || clusterStyle == "HYBRID") {
-                        val currentAngle = Math.toRadians((startAngle + sweepAngle * sweepRatio).toDouble())
-                        val center = Offset(size.width / 2f, size.height / 2f)
-                        val needleLength = (size.width / 2f) - strokeWidthPx - 10.dp.toPx()
-                        val needleEnd = Offset(
-                            (center.x + needleLength * cos(currentAngle)).toFloat(),
-                            (center.y + needleLength * sin(currentAngle)).toFloat()
+                        // 1. Inactive Track
+                        drawArc(
+                            color = colors.border.copy(alpha = 0.35f),
+                            startAngle = startAngle,
+                            sweepAngle = sweepAngle,
+                            useCenter = false,
+                            topLeft = arcOffset,
+                            size = arcSize,
+                            style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
                         )
-                        drawLine(
-                            color = colors.warningRed,
-                            start = center,
-                            end = needleEnd,
-                            strokeWidth = 3.dp.toPx(),
-                            cap = StrokeCap.Round
+
+                        // 2. Active Glowing Gradient Sweep
+                        val activeBrush = Brush.sweepGradient(
+                            0.0f to colors.primaryAccent,
+                            0.75f to colors.electricAccent,
+                            1.0f to colors.warningRed
                         )
-                        drawCircle(
-                            color = colors.warningRed,
-                            radius = 6.dp.toPx(),
-                            center = center
+                        drawArc(
+                            brush = activeBrush,
+                            startAngle = startAngle,
+                            sweepAngle = sweepAngle * sweepRatio,
+                            useCenter = false,
+                            topLeft = arcOffset,
+                            size = arcSize,
+                            style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round)
+                        )
+
+                        // 3. Analog Needle (If Hybrid Style)
+                        if (clusterStyle == "HYBRID") {
+                            val currentAngle = Math.toRadians((startAngle + sweepAngle * sweepRatio).toDouble())
+                            val center = Offset(size.width / 2f, size.height / 2f)
+                            val needleLength = (size.width / 2f) - strokeWidthPx - 10.dp.toPx()
+                            val needleEnd = Offset(
+                                (center.x + needleLength * cos(currentAngle)).toFloat(),
+                                (center.y + needleLength * sin(currentAngle)).toFloat()
+                            )
+                            drawLine(
+                                color = colors.warningRed,
+                                start = center,
+                                end = needleEnd,
+                                strokeWidth = 3.dp.toPx(),
+                                cap = StrokeCap.Round
+                            )
+                            drawCircle(
+                                color = colors.warningRed,
+                                radius = 6.dp.toPx(),
+                                center = center
+                            )
+                        }
+                    }
+
+                    // Center Digital Speed Display (Extra large, glanceable at speed)
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = animatedSpeed.toInt().toString(),
+                            style = MotoDriveTypography.displayLarge.copy(
+                                fontSize = 68.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = (-2).sp
+                            ),
+                            color = colors.primaryText
+                        )
+                        Text(
+                            text = speedUnit.uppercase(),
+                            style = MotoDriveTypography.labelMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                letterSpacing = 1.5.sp
+                            ),
+                            color = colors.electricAccent
                         )
                     }
-                }
-
-                // Center Digital Speed Display (Extra large, glanceable at speed)
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = animatedSpeed.toInt().toString(),
-                        style = MotoDriveTypography.displayLarge.copy(
-                            fontSize = 68.sp,
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = (-2).sp
-                        ),
-                        color = colors.primaryText
-                    )
-                    Text(
-                        text = speedUnit.uppercase(),
-                        style = MotoDriveTypography.labelMedium.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 14.sp,
-                            letterSpacing = 1.5.sp
-                        ),
-                        color = colors.electricAccent
-                    )
                 }
             }
 

@@ -27,6 +27,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
@@ -351,122 +352,323 @@ private fun DigitalGaugeCanvas(
 }
 
 /**
- * 2. Classic Motorcycle Round Analog Speedometer with physical sweeping needle
+ * 2. Premium Motorcycle Round Analog Chrono Speedometer with physical sweeping needle,
+ * 3D machined dial bevels, precision graduations, luminescent needle with drop shadow,
+ * multi-stage turned aluminum spindle hub, and integrated digital speed pod.
  */
 @Composable
-private fun AnalogGaugeCanvas(
+fun AnalogGaugeCanvas(
     animatedSpeed: Float,
     maxGaugeSpeed: Float,
     speedUnit: String,
     hasGpsFix: Boolean,
-    colors: CockpitColors
+    colors: CockpitColors,
+    modifier: Modifier = Modifier
 ) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val diameter = minOf(size.width, size.height) * 0.94f
+            val diameter = minOf(size.width, size.height) * 0.96f
             val center = Offset(size.width / 2f, size.height / 2f)
             val radius = diameter / 2f
 
             // Start at 135° (bottom-left) and sweep 270° to 405° (bottom-right)
             val startAngle = 135f
             val totalSweep = 270f
+            val needleRatio = (animatedSpeed / maxGaugeSpeed).coerceIn(0f, 1f)
+            val activeSweep = totalSweep * needleRatio
 
-            // Outer dial border ring
+            // 1. Outer Machined Bezel Rim
             drawCircle(
-                color = if (colors.isLight) colors.border.copy(alpha = 0.7f) else colors.card,
+                color = if (colors.isLight) colors.border.copy(alpha = 0.9f) else Color(0xFF1E293B),
                 radius = radius,
                 center = center,
                 style = Stroke(width = 3.dp.toPx())
             )
+            drawCircle(
+                color = if (colors.isLight) Color(0xFFE2E8F0) else Color(0xFF0F172A),
+                radius = radius - 2.dp.toPx(),
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
 
-            // Graduated Dial Numbers (0, 30, 60, 90, 120, 150, 180)
+            // 2. High-End Dial Face Gradient (Subtle depth vignette)
+            val dialBrush = if (colors.isLight) {
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFFFFFFFF),
+                        Color(0xFFF8FAFC),
+                        Color(0xFFF1F5F9)
+                    ),
+                    center = center,
+                    radius = radius
+                )
+            } else {
+                Brush.radialGradient(
+                    colors = listOf(
+                        Color(0xFF111827),
+                        Color(0xFF0B0F19),
+                        Color(0xFF06090E)
+                    ),
+                    center = center,
+                    radius = radius
+                )
+            }
+            drawCircle(
+                brush = dialBrush,
+                radius = radius - 3.dp.toPx(),
+                center = center
+            )
+
+            // 3. Inactive Perimeter Track Ring
+            val trackRadius = radius - 7.dp.toPx()
+            val trackSize = Size(trackRadius * 2f, trackRadius * 2f)
+            val trackOffset = Offset(center.x - trackRadius, center.y - trackRadius)
+
+            drawArc(
+                color = if (colors.isLight) colors.border.copy(alpha = 0.35f) else Color(0x33334155),
+                startAngle = startAngle,
+                sweepAngle = totalSweep,
+                useCenter = false,
+                topLeft = trackOffset,
+                size = trackSize,
+                style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // 4. Sport Redline Accent Arc (Upper 25% of the gauge, e.g. 135 km/h to 180 km/h)
+            val redlineStartFraction = 0.75f
+            val redlineStartAngle = startAngle + (totalSweep * redlineStartFraction)
+            val redlineSweepAngle = totalSweep * (1f - redlineStartFraction)
+            drawArc(
+                color = colors.warningRed.copy(alpha = if (colors.isLight) 0.35f else 0.5f),
+                startAngle = redlineStartAngle,
+                sweepAngle = redlineSweepAngle,
+                useCenter = false,
+                topLeft = trackOffset,
+                size = trackSize,
+                style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
+            )
+
+            // 5. Active Backlit Illuminated Speed Glow Arc (Dynamic LED light guide)
+            if (activeSweep > 1f) {
+                val activeSweepBrush = Brush.sweepGradient(
+                    0.0f to colors.primaryAccent,
+                    0.7f to colors.electricAccent,
+                    1.0f to if (needleRatio >= 0.75f) colors.warningRed else colors.electricAccent
+                )
+                drawArc(
+                    brush = activeSweepBrush,
+                    startAngle = startAngle,
+                    sweepAngle = activeSweep,
+                    useCenter = false,
+                    topLeft = trackOffset,
+                    size = trackSize,
+                    style = Stroke(width = 3.5.dp.toPx(), cap = StrokeCap.Round)
+                )
+            }
+
+            // 6. Graduated Precision Ticks & Speed Numbers
             val textPaint = Paint().apply {
-                color = colors.primaryText.toArgb()
                 textSize = 10.dp.toPx()
                 textAlign = Paint.Align.CENTER
                 typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                 isAntiAlias = true
             }
 
-            val stepCount = 6
-            for (i in 0..stepCount) {
-                val fraction = i.toFloat() / stepCount
+            // 36 sub-intervals (every 5 km/h)
+            val totalIntervals = 36
+            for (i in 0..totalIntervals) {
+                val fraction = i.toFloat() / totalIntervals
                 val angleDeg = startAngle + (fraction * totalSweep)
                 val angleRad = Math.toRadians(angleDeg.toDouble())
-                val speedVal = (fraction * maxGaugeSpeed).toInt()
+                val isMajor = (i % 4 == 0)          // Every 20 km/h: 0, 20, 40, 60...
+                val isMedium = (i % 2 == 0 && !isMajor) // Every 10 km/h: 10, 30, 50...
+                val isRedline = fraction >= redlineStartFraction
 
-                val numRadius = radius - 16.dp.toPx()
-                val numX = (center.x + numRadius * cos(angleRad)).toFloat()
-                val numY = (center.y + numRadius * sin(angleRad)).toFloat() + 4.dp.toPx()
+                val tickLen = when {
+                    isMajor -> 11.dp.toPx()
+                    isMedium -> 7.dp.toPx()
+                    else -> 4.dp.toPx()
+                }
 
-                drawContext.canvas.nativeCanvas.drawText("$speedVal", numX, numY, textPaint)
-            }
+                val tickWidth = when {
+                    isMajor -> 2.2.dp.toPx()
+                    isMedium -> 1.4.dp.toPx()
+                    else -> 0.9.dp.toPx()
+                }
 
-            // Dial Ticks
-            val totalTicks = 36
-            for (i in 0..totalTicks) {
-                val fraction = i.toFloat() / totalTicks
-                val angleDeg = startAngle + (fraction * totalSweep)
-                val angleRad = Math.toRadians(angleDeg.toDouble())
-                val isMajor = i % 6 == 0
-                val isRedline = fraction >= 0.8f
+                val tickColor = when {
+                    isRedline -> colors.warningRed
+                    isMajor -> colors.primaryText
+                    isMedium -> colors.secondaryText
+                    else -> if (colors.isLight) colors.border else Color(0xFF475569)
+                }
 
-                val tickLen = if (isMajor) 10.dp.toPx() else 5.dp.toPx()
-                val tickColor = if (isRedline) colors.warningRed else if (isMajor) colors.primaryText else colors.border
+                val outerR = radius - 8.dp.toPx()
+                val innerR = outerR - tickLen
 
-                val startX = (center.x + (radius - tickLen) * cos(angleRad)).toFloat()
-                val startY = (center.y + (radius - tickLen) * sin(angleRad)).toFloat()
-                val endX = (center.x + radius * cos(angleRad)).toFloat()
-                val endY = (center.y + radius * sin(angleRad)).toFloat()
+                val startX = (center.x + innerR * cos(angleRad)).toFloat()
+                val startY = (center.y + innerR * sin(angleRad)).toFloat()
+                val endX = (center.x + outerR * cos(angleRad)).toFloat()
+                val endY = (center.y + outerR * sin(angleRad)).toFloat()
 
                 drawLine(
                     color = tickColor,
                     start = Offset(startX, startY),
                     end = Offset(endX, endY),
-                    strokeWidth = if (isMajor) 2.dp.toPx() else 1.dp.toPx(),
+                    strokeWidth = tickWidth,
                     cap = StrokeCap.Round
                 )
+
+                // Radial Major Speed Numbers
+                if (isMajor) {
+                    val speedVal = (fraction * maxGaugeSpeed).toInt()
+                    val numRadius = radius - 26.dp.toPx()
+                    val numX = (center.x + numRadius * cos(angleRad)).toFloat()
+                    val numY = (center.y + numRadius * sin(angleRad)).toFloat() + 3.5.dp.toPx()
+
+                    textPaint.color = if (isRedline) colors.warningRed.toArgb() else colors.primaryText.toArgb()
+                    drawContext.canvas.nativeCanvas.drawText("$speedVal", numX, numY, textPaint)
+                }
             }
 
-            // Sweeping Physical Red Needle
-            val needleRatio = (animatedSpeed / maxGaugeSpeed).coerceIn(0f, 1f)
-            val needleAngleDeg = startAngle + (needleRatio * totalSweep)
-            val needleAngleRad = Math.toRadians(needleAngleDeg.toDouble())
-
-            val needleLength = radius - 18.dp.toPx()
-            val needleTip = Offset(
-                (center.x + needleLength * cos(needleAngleRad)).toFloat(),
-                (center.y + needleLength * sin(needleAngleRad)).toFloat()
+            // 7. TVS RONIN Brand Watermark (at 12 o'clock inside dial)
+            val brandPaint = Paint().apply {
+                color = colors.electricAccent.toArgb()
+                textSize = 7.5.dp.toPx()
+                textAlign = Paint.Align.CENTER
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                letterSpacing = 0.18f
+                isAntiAlias = true
+            }
+            drawContext.canvas.nativeCanvas.drawText(
+                "TVS RONIN",
+                center.x,
+                center.y - radius * 0.38f,
+                brandPaint
             )
 
-            // Needle glow / line
+            // 8. Sweeping Aerodynamic Sports Needle
+            val needleAngleDeg = startAngle + (needleRatio * totalSweep)
+            val needleAngleRad = Math.toRadians(needleAngleDeg.toDouble())
+            val dirX = cos(needleAngleRad).toFloat()
+            val dirY = sin(needleAngleRad).toFloat()
+            val normX = -dirY
+            val normY = dirX
+
+            val pointerLength = radius - 12.dp.toPx()
+            val tailLength = 18.dp.toPx()
+            val baseWidth = 3.5.dp.toPx()
+            val tailWidth = 4.5.dp.toPx()
+
+            // Needle points
+            val tip = center + Offset(dirX * pointerLength, dirY * pointerLength)
+            val baseL = center - Offset(normX * baseWidth, normY * baseWidth)
+            val baseR = center + Offset(normX * baseWidth, normY * baseWidth)
+            val tailTip = center - Offset(dirX * tailLength, dirY * tailLength)
+            val tailL = tailTip - Offset(normX * tailWidth, normY * tailWidth)
+            val tailR = tailTip + Offset(normX * tailWidth, normY * tailWidth)
+
+            // A) Needle Drop Shadow (3D Depth onto dial face)
+            val shadowOffset = Offset(2.dp.toPx(), 3.5.dp.toPx())
+            val shadowPath = Path().apply {
+                moveTo(tailTip.x + shadowOffset.x, tailTip.y + shadowOffset.y)
+                lineTo(tailL.x + shadowOffset.x, tailL.y + shadowOffset.y)
+                lineTo(baseL.x + shadowOffset.x, baseL.y + shadowOffset.y)
+                lineTo(tip.x + shadowOffset.x, tip.y + shadowOffset.y)
+                lineTo(baseR.x + shadowOffset.x, baseR.y + shadowOffset.y)
+                lineTo(tailR.x + shadowOffset.x, tailR.y + shadowOffset.y)
+                close()
+            }
+            drawPath(path = shadowPath, color = Color(0x33000000))
+
+            // B) Needle Main Body (Racing Red / Warning Red)
+            val needlePath = Path().apply {
+                moveTo(tailTip.x, tailTip.y)
+                lineTo(tailL.x, tailL.y)
+                lineTo(baseL.x, baseL.y)
+                lineTo(tip.x, tip.y)
+                lineTo(baseR.x, baseR.y)
+                lineTo(tailR.x, tailR.y)
+                close()
+            }
+            drawPath(path = needlePath, color = colors.warningRed)
+
+            // C) Needle Optical Luminescent Spine (Illuminated optical core)
+            val spineStart = center + Offset(dirX * 5.dp.toPx(), dirY * 5.dp.toPx())
+            val spineEnd = center + Offset(dirX * (pointerLength - 6.dp.toPx()), dirY * (pointerLength - 6.dp.toPx()))
             drawLine(
-                color = colors.warningRed,
-                start = center,
-                end = needleTip,
-                strokeWidth = 3.5.dp.toPx(),
+                color = Color.White.copy(alpha = 0.85f),
+                start = spineStart,
+                end = spineEnd,
+                strokeWidth = 1.2.dp.toPx(),
                 cap = StrokeCap.Round
             )
 
-            // Center Needle Pivot Hub
-            drawCircle(color = colors.cardElevated, radius = 10.dp.toPx(), center = center)
-            drawCircle(color = colors.electricAccent, radius = 4.dp.toPx(), center = center)
+            // 9. Multi-Stage Precision Turned Aluminum Center Spindle
+            // Outer spindle rim
+            drawCircle(
+                color = if (colors.isLight) Color(0xFFE2E8F0) else Color(0xFF1E293B),
+                radius = 14.dp.toPx(),
+                center = center
+            )
+            drawCircle(
+                color = if (colors.isLight) colors.border else Color(0xFF334155),
+                radius = 14.dp.toPx(),
+                center = center,
+                style = Stroke(width = 1.dp.toPx())
+            )
+            // Middle cap disc
+            drawCircle(
+                color = colors.cardElevated,
+                radius = 10.dp.toPx(),
+                center = center
+            )
+            // Center jewel rivet
+            drawCircle(
+                color = colors.primaryAccent,
+                radius = 4.5.dp.toPx(),
+                center = center
+            )
+            // Specular reflection highlight dot
+            drawCircle(
+                color = Color.White.copy(alpha = 0.9f),
+                radius = 1.2.dp.toPx(),
+                center = center + Offset(-1.5.dp.toPx(), -1.5.dp.toPx())
+            )
         }
 
-        // Small digital odometer box at bottom of analog dial
+        // 10. Integrated Digital Telemetry Pod (Bottom center of dial)
         Box(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 12.dp)
-                .clip(RoundedCornerShape(4.dp))
+                .padding(bottom = 10.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(colors.card)
-                .padding(horizontal = 8.dp, vertical = 2.dp)
+                .border(1.dp, colors.border, RoundedCornerShape(8.dp))
+                .padding(horizontal = 10.dp, vertical = 2.dp)
         ) {
-            Text(
-                text = "${animatedSpeed.toInt()} $speedUnit",
-                style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = colors.primaryText
-            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "${animatedSpeed.toInt()}",
+                    style = MotoDriveTypography.titleMedium.copy(
+                        fontWeight = FontWeight.ExtraBold,
+                        fontSize = 14.sp
+                    ),
+                    color = colors.primaryText
+                )
+                Text(
+                    text = speedUnit.uppercase(),
+                    style = MotoDriveTypography.labelSmall.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 9.sp,
+                        letterSpacing = 0.8.sp
+                    ),
+                    color = colors.electricAccent
+                )
+            }
         }
     }
 }
