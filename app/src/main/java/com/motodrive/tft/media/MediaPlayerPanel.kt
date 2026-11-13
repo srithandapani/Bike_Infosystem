@@ -143,6 +143,7 @@ fun FullScreenMediaScreen(
     onPrevious: () -> Unit,
     onSeekTo: (Long) -> Unit,
     onLaunchMusicApp: (String) -> Unit,
+    onOpenNotificationAccess: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalCockpitColors.current
@@ -191,7 +192,7 @@ fun FullScreenMediaScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Album,
+                        imageVector = if (!uiState.isConnected) Icons.Default.BluetoothDisabled else Icons.Default.Album,
                         contentDescription = "Album Art",
                         tint = colors.primaryAccent,
                         modifier = Modifier.size(80.dp)
@@ -218,7 +219,7 @@ fun FullScreenMediaScreen(
             // Track & Artist Header
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                    text = "NOW PLAYING",
+                    text = if (!uiState.isConnected) "BLUETOOTH AUDIO" else if (uiState.isPlaying) "NOW PLAYING" else "PAUSED",
                     style = MotoDriveTypography.labelSmall.copy(
                         letterSpacing = 1.5.sp,
                         color = colors.primaryAccent
@@ -346,6 +347,18 @@ fun FullScreenMediaScreen(
                     modifier = Modifier.weight(1f)
                 ) {
                     Text("YT MUSIC", color = colors.primaryText, style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                }
+
+                if (!uiState.isNotificationAccessGranted) {
+                    Button(
+                        onClick = onOpenNotificationAccess,
+                        colors = ButtonDefaults.buttonColors(containerColor = colors.cardElevated),
+                        shape = RoundedCornerShape(8.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, colors.primaryAccent),
+                        modifier = Modifier.weight(1.3f)
+                    ) {
+                        Text("NOTIF ACCESS", color = colors.electricAccent, style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold))
+                    }
                 }
             }
         }

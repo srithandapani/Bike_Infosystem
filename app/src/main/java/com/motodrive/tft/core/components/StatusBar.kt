@@ -35,6 +35,9 @@ fun StatusBar(
     iphoneBleState: IphoneBleConnectionState,
     weatherState: WeatherUiState,
     isRidingMode: Boolean,
+    isBluetoothEnabled: Boolean = true,
+    isBluetoothConnected: Boolean = false,
+    connectedDeviceName: String? = null,
     modifier: Modifier = Modifier
 ) {
     val colors = LocalCockpitColors.current
@@ -140,21 +143,45 @@ fun StatusBar(
                 )
             }
 
-            // iPhone Bluetooth Connection
+            // Bluetooth Connection Status (System Bluetooth / Helmet / Connected Phone / iPhone BLE)
+            val isBtOn = isBluetoothEnabled
+            val isBtConnected = iphoneBleState.isConnected || isBluetoothConnected
+            val btLabel = when {
+                !isBtOn -> "BT OFF"
+                iphoneBleState.isConnected -> "iPHONE"
+                isBluetoothConnected -> connectedDeviceName?.take(9)?.uppercase() ?: "CONNECTED"
+                else -> "BT ON"
+            }
+            val btIcon = when {
+                !isBtOn -> Icons.Default.BluetoothDisabled
+                isBtConnected -> Icons.Default.BluetoothConnected
+                else -> Icons.Default.Bluetooth
+            }
+            val btTint = when {
+                !isBtOn -> colors.secondaryText.copy(alpha = 0.4f)
+                isBtConnected -> ElectricBlue
+                else -> ElectricBlue.copy(alpha = 0.75f)
+            }
+            val btTextColor = when {
+                !isBtOn -> colors.secondaryText.copy(alpha = 0.4f)
+                isBtConnected -> colors.primaryText
+                else -> colors.secondaryText
+            }
+
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Icon(
-                    imageVector = if (iphoneBleState.isConnected) Icons.Default.BluetoothConnected else Icons.Default.Bluetooth,
+                    imageVector = btIcon,
                     contentDescription = "Bluetooth",
-                    tint = if (iphoneBleState.isConnected) ElectricBlue else colors.secondaryText.copy(alpha = 0.5f),
+                    tint = btTint,
                     modifier = Modifier.size(15.dp)
                 )
                 Text(
-                    text = if (iphoneBleState.isConnected) "iPHONE" else "BT OFF",
+                    text = btLabel,
                     style = MotoDriveTypography.labelSmall.copy(fontSize = 10.sp, fontWeight = FontWeight.SemiBold),
-                    color = if (iphoneBleState.isConnected) colors.primaryText else colors.secondaryText.copy(alpha = 0.5f)
+                    color = btTextColor
                 )
             }
         }

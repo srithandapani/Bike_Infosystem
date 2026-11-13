@@ -12,11 +12,17 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Looper
 import android.os.SystemClock
 import android.view.Surface
 import android.view.WindowManager
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.android.gms.location.LocationCallback
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationResult
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -66,6 +72,7 @@ class SpeedometerViewModel(application: Application) :
 
     private val locationManager = application.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     private val sensorManager = application.getSystemService(Context.SENSOR_SERVICE) as SensorManager
+    private val fusedLocationClient = LocationServices.getFusedLocationProviderClient(application)
 
     private val _uiState = MutableStateFlow(SpeedometerUiState())
     val uiState: StateFlow<SpeedometerUiState> = _uiState.asStateFlow()
@@ -80,6 +87,13 @@ class SpeedometerViewModel(application: Application) :
     private var lastDeclinationFix: Location? = null
     private var declinationDeg = 0f
     private var locationUpdatesStarted = false
+
+    private val fusedLocationCallback = object : LocationCallback() {
+        override fun onLocationResult(result: LocationResult) {
+            val loc = result.lastLocation ?: return
+            handleLocationFix(loc, isFused = true)
+        }
+    }
 
     // ---- Compass (rotation-vector based, landscape aware, true north) ----
     private val rotationMatrix = FloatArray(9)
@@ -115,7 +129,7 @@ class SpeedometerViewModel(application: Application) :
                 _uiState.update { cur ->
                     cur.copy(
                         currentSpeedKmH = if (gpsActive) cur.currentSpeedKmH else smoothedSpeed,
-                        hasGpsFix = gpsActive,
+                        hasGpsFix = gpsActive || cur.lastLocation != null,
                         isRiding = gpsActive && cur.currentSpeedKmH > 5f,
                         rideDurationSeconds = cur.rideDurationSeconds + 1
                     )
@@ -125,20 +139,65 @@ class SpeedometerViewModel(application: Application) :
     }
 
     fun startLocationUpdates() {
-        if (locationUpdatesStarted) return
         try {
-            // GPS only for speed/distance. The NETWORK provider (cell/Wi-Fi, 20-2000 m error)
-            // used to be mixed in and silently polluted odometer and speed.
+            // 1. Immediately seed last known location from Fused Location and Native Providers
+            fusedLocationClient.lastLocation.addOnSuccessListener { loc ->
+                if (loc != null) {
+                    handleInitialLocation(loc)
+                }
+            }
+
+            try {
+                val lastGps = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                val lastNet = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                val best = when {
+                    lastGps != null && lastNet != null -> if (lastGps.time >= lastNet.time) lastGps else lastNet
+                    lastGps != null -> lastGps
+                    else -> lastNet
+                }
+                if (best != null) {
+                    handleInitialLocation(best)
+                }
+            } catch (_: SecurityException) {}
+
+            // 2. High Accuracy Continuous Fused Location Updates
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
+                .setMinUpdateIntervalMillis(500L)
+                .setMinUpdateDistanceMeters(0f)
+                .build()
+            fusedLocationClient.requestLocationUpdates(locationRequest, fusedLocationCallback, Looper.getMainLooper())
+
+            // 3. Native LocationManager updates for high precision GPS Doppler speed
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER, 500L, 0f, this
+                    LocationManager.GPS_PROVIDER, 500L, 0f, this, Looper.getMainLooper()
                 )
-                locationUpdatesStarted = true
             }
+            if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                locationManager.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER, 2000L, 0f, this, Looper.getMainLooper()
+                )
+            }
+            locationUpdatesStarted = true
         } catch (_: SecurityException) {
             // Permission not granted yet; MainActivity calls this again after grant.
+            locationUpdatesStarted = false
         } catch (e: Exception) {
             e.printStackTrace()
+        }
+    }
+
+    private fun handleInitialLocation(location: Location) {
+        if (location.latitude == 0.0 && location.longitude == 0.0) return
+        refreshDeclination(location)
+        _uiState.update { cur ->
+            if (cur.lastLocation == null) {
+                cur.copy(
+                    lastLocation = location,
+                    hasGpsFix = true,
+                    gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else cur.gpsAccuracyMeters
+                )
+            } else cur
         }
     }
 
@@ -165,91 +224,102 @@ class SpeedometerViewModel(application: Application) :
     // Location handling
     // ----------------------------------------------------------------------------------
     override fun onLocationChanged(location: Location) {
-        if (location.provider != LocationManager.GPS_PROVIDER) return
-        if (!location.hasAccuracy() || location.accuracy > MAX_ACCURACY_M) return
+        handleLocationFix(location, isFused = false)
+    }
+
+    private fun handleLocationFix(location: Location, isFused: Boolean) {
+        if (location.latitude == 0.0 && location.longitude == 0.0) return
 
         val nowElapsedMs = SystemClock.elapsedRealtime()
-        val fixElapsedMs = location.elapsedRealtimeNanos / 1_000_000L
-        if (nowElapsedMs - fixElapsedMs > MAX_FIX_AGE_MS) return // stale / cached fix
-
-        val prev = previousFix
-        // Monotonic time between fixes (wall-clock location.time can jump when GPS time syncs)
-        val dtSec = if (prev != null) (location.elapsedRealtimeNanos - prev.elapsedRealtimeNanos) / 1e9f else 0f
-        if (prev != null && dtSec <= 0f) return // duplicate / out-of-order
-
-        // ---- Raw speed (m/s) ----
-        // Doppler speed from the chipset is far more accurate than distance/time between fixes.
-        val dopplerOk = location.hasSpeed() &&
-                !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
-                        location.hasSpeedAccuracy() && location.speedAccuracyMetersPerSecond > 3f)
-        var rawMs: Float = if (dopplerOk) {
-            location.speed
-        } else if (prev != null && dtSec in 0.2f..5f) {
-            prev.distanceTo(location) / dtSec
-        } else 0f
-
-        if (rawMs > MAX_PLAUSIBLE_MS) return // glitch
-
-        // Reject physically impossible jumps relative to the last smoothed speed
-        if (prev != null && dtSec > 0f) {
-            val accel = abs(rawMs - smoothedSpeed / 3.6f) / dtSec
-            if (accel > MAX_ACCEL_MS2 && lastGpsFixElapsedMs != 0L &&
-                nowElapsedMs - lastGpsFixElapsedMs < GPS_TIMEOUT_MS
-            ) {
-                rawMs = smoothedSpeed / 3.6f + sign(rawMs - smoothedSpeed / 3.6f) * MAX_ACCEL_MS2 * dtSec
-            }
-        }
-
         lastGpsFixElapsedMs = nowElapsedMs
-        val rawKmH = (rawMs * 3.6f).coerceAtLeast(0f)
-
-        // ---- Adaptive low-pass filter ----
-        if (rawKmH < STATIONARY_KMH) {
-            smoothedSpeed = 0f // hard zero: avoids "3 km/h while parked" drift
-        } else {
-            val alpha = if (abs(rawKmH - smoothedSpeed) > 7f) 0.65f else 0.25f
-            smoothedSpeed = rawKmH * alpha + smoothedSpeed * (1f - alpha)
-        }
-        val moving = smoothedSpeed > 0f
-
-        // ---- Odometer ----
-        if (prev != null && moving) {
-            val d = prev.distanceTo(location)
-            // Ignore displacement smaller than the combined position uncertainty (stationary
-            // jitter) and anything faster than physically possible for this interval.
-            val noiseFloor = max(1f, 0.5f * (prev.accuracy + location.accuracy) * 0.25f)
-            if (d >= noiseFloor && d <= MAX_PLAUSIBLE_MS * dtSec) {
-                totalDistanceMeters += d.toDouble()
-            }
-            movingTimeMs += (dtSec * 1000f).toLong()
-        }
-        previousFix = location
-
-        // ---- Heading ----
-        val bearingDeg = if (location.hasBearing() && smoothedSpeed > 5f) {
-            location.bearing
-        } else _uiState.value.headingDegrees
 
         refreshDeclination(location)
 
-        val distKm = (totalDistanceMeters / 1000.0)
-        val movingHours = movingTimeMs / 3_600_000.0
-        val avg = if (movingHours > 0.0014 /* ~5 s */) (distKm / movingHours).toFloat() else 0f
-
+        // Always update device live location immediately for navigation & map display
         _uiState.update { cur ->
             cur.copy(
-                currentSpeedKmH = smoothedSpeed,
-                maxSpeedKmH = max(cur.maxSpeedKmH, smoothedSpeed),
-                averageSpeedKmH = avg,
-                tripDistanceKm = distKm.toFloat(),
-                movingTimeSeconds = movingTimeMs / 1000L,
+                lastLocation = location,
                 hasGpsFix = true,
-                gpsAccuracyMeters = location.accuracy,
-                headingDegrees = bearingDeg,
-                headingCardinal = cardinal(bearingDeg),
-                isRiding = smoothedSpeed > 5f,
-                lastLocation = location
+                gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else cur.gpsAccuracyMeters
             )
+        }
+
+        // Precision Speedometer & Odometer Filtering
+        // Only run speed/distance integration on high-confidence fixes (GPS or Doppler speed)
+        val isGps = location.provider == LocationManager.GPS_PROVIDER
+        val hasGoodAccuracy = location.hasAccuracy() && location.accuracy <= MAX_ACCURACY_M
+        val fixElapsedMs = location.elapsedRealtimeNanos / 1_000_000L
+        val isFresh = (nowElapsedMs - fixElapsedMs) <= MAX_FIX_AGE_MS
+
+        if ((isGps || location.hasSpeed()) && hasGoodAccuracy && isFresh) {
+            val prev = previousFix
+            val dtSec = if (prev != null) (location.elapsedRealtimeNanos - prev.elapsedRealtimeNanos) / 1e9f else 0f
+            if (prev != null && dtSec <= 0f) return
+
+            // Doppler speed from the chipset is far more accurate than distance/time between fixes
+            val dopplerOk = location.hasSpeed() &&
+                    !(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+                            location.hasSpeedAccuracy() && location.speedAccuracyMetersPerSecond > 3f)
+            var rawMs: Float = if (dopplerOk) {
+                location.speed
+            } else if (prev != null && dtSec in 0.2f..5f) {
+                prev.distanceTo(location) / dtSec
+            } else 0f
+
+            if (rawMs > MAX_PLAUSIBLE_MS) return // glitch
+
+            if (prev != null && dtSec > 0f) {
+                val accel = abs(rawMs - smoothedSpeed / 3.6f) / dtSec
+                if (accel > MAX_ACCEL_MS2 && lastGpsFixElapsedMs != 0L &&
+                    nowElapsedMs - lastGpsFixElapsedMs < GPS_TIMEOUT_MS
+                ) {
+                    rawMs = smoothedSpeed / 3.6f + sign(rawMs - smoothedSpeed / 3.6f) * MAX_ACCEL_MS2 * dtSec
+                }
+            }
+
+            val rawKmH = (rawMs * 3.6f).coerceAtLeast(0f)
+
+            if (rawKmH < STATIONARY_KMH) {
+                smoothedSpeed = 0f
+            } else {
+                val alpha = if (abs(rawKmH - smoothedSpeed) > 7f) 0.65f else 0.25f
+                smoothedSpeed = rawKmH * alpha + smoothedSpeed * (1f - alpha)
+            }
+            val moving = smoothedSpeed > 0f
+
+            if (prev != null && moving) {
+                val d = prev.distanceTo(location)
+                val noiseFloor = max(1f, 0.5f * (prev.accuracy + location.accuracy) * 0.25f)
+                if (d >= noiseFloor && d <= MAX_PLAUSIBLE_MS * dtSec) {
+                    totalDistanceMeters += d.toDouble()
+                }
+                movingTimeMs += (dtSec * 1000f).toLong()
+            }
+            previousFix = location
+
+            val bearingDeg = if (location.hasBearing() && smoothedSpeed > 5f) {
+                location.bearing
+            } else _uiState.value.headingDegrees
+
+            val distKm = (totalDistanceMeters / 1000.0)
+            val movingHours = movingTimeMs / 3_600_000.0
+            val avg = if (movingHours > 0.0014) (distKm / movingHours).toFloat() else 0f
+
+            _uiState.update { cur ->
+                cur.copy(
+                    currentSpeedKmH = smoothedSpeed,
+                    maxSpeedKmH = max(cur.maxSpeedKmH, smoothedSpeed),
+                    averageSpeedKmH = avg,
+                    tripDistanceKm = distKm.toFloat(),
+                    movingTimeSeconds = movingTimeMs / 1000L,
+                    hasGpsFix = true,
+                    gpsAccuracyMeters = location.accuracy,
+                    headingDegrees = bearingDeg,
+                    headingCardinal = cardinal(bearingDeg),
+                    isRiding = smoothedSpeed > 5f,
+                    lastLocation = location
+                )
+            }
         }
     }
 
@@ -346,6 +416,7 @@ class SpeedometerViewModel(application: Application) :
     override fun onCleared() {
         super.onCleared()
         try {
+            fusedLocationClient.removeLocationUpdates(fusedLocationCallback)
             locationManager.removeUpdates(this)
             sensorManager.unregisterListener(this)
             timerJob?.cancel()

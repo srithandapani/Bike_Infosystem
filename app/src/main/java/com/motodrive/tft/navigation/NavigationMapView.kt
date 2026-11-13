@@ -46,6 +46,37 @@ import org.osmdroid.views.overlay.Polyline
 
 private fun borderStroke(color: Color) = BorderStroke(1.dp, color)
 
+private fun createVehicleIcon(context: android.content.Context, primaryColor: Int): android.graphics.drawable.BitmapDrawable {
+    val sizePx = (36 * context.resources.displayMetrics.density).toInt().coerceAtLeast(36)
+    val bitmap = android.graphics.Bitmap.createBitmap(sizePx, sizePx, android.graphics.Bitmap.Config.ARGB_8888)
+    val canvas = android.graphics.Canvas(bitmap)
+    val paint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
+    val center = sizePx / 2f
+
+    // Outer glow ring
+    paint.color = primaryColor
+    paint.alpha = 75
+    canvas.drawCircle(center, center, center - 2f, paint)
+
+    // Inner filled circle
+    paint.alpha = 255
+    canvas.drawCircle(center, center, center - 7f, paint)
+
+    // White directional arrow pointing UP
+    paint.color = android.graphics.Color.WHITE
+    paint.style = android.graphics.Paint.Style.FILL
+    val path = android.graphics.Path().apply {
+        moveTo(center, 9f)
+        lineTo(center + 9f, sizePx - 10f)
+        lineTo(center, sizePx - 14f)
+        lineTo(center - 9f, sizePx - 10f)
+        close()
+    }
+    canvas.drawPath(path, paint)
+
+    return android.graphics.drawable.BitmapDrawable(context.resources, bitmap)
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NavigationMapView(
@@ -89,6 +120,7 @@ fun NavigationMapView(
             if (userMarkerRef == null) {
                 val marker = Marker(map).apply {
                     position = geoPoint
+                    icon = createVehicleIcon(map.context, colors.primaryAccent.toArgb())
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
                     title = "TVS Ronin 225"
                 }
@@ -192,11 +224,20 @@ fun NavigationMapView(
                     }
 
                     val startLoc = currentLocation
-                    val startGeo = if (startLoc != null) {
-                        GeoPoint(startLoc.latitude, startLoc.longitude)
+                    var initialGeo: GeoPoint? = null
+                    if (startLoc != null) {
+                        initialGeo = GeoPoint(startLoc.latitude, startLoc.longitude)
                     } else {
-                        GeoPoint(12.9716, 77.5946)
+                        try {
+                            val lm = ctx.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
+                            val last = lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
+                                ?: lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
+                            if (last != null) {
+                                initialGeo = GeoPoint(last.latitude, last.longitude)
+                            }
+                        } catch (_: SecurityException) {}
                     }
+                    val startGeo = initialGeo ?: GeoPoint(12.9716, 77.5946)
                     controller.setCenter(startGeo)
 
                     mapViewRef = this
@@ -409,6 +450,47 @@ fun NavigationMapView(
                             Text("RE-CENTER", style = MotoDriveTypography.labelMedium, color = colors.primaryText)
                         }
                     }
+                }
+            }
+        }
+
+        // Floating Re-Center / GPS Live Location Button
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomEnd)
+                .padding(end = 12.dp, bottom = 12.dp)
+        ) {
+            Surface(
+                onClick = {
+                    isFollowingRider = true
+                    val targetLoc = currentLocation
+                    if (targetLoc != null) {
+                        mapViewRef?.controller?.setZoom(17.0)
+                        mapViewRef?.controller?.animateTo(GeoPoint(targetLoc.latitude, targetLoc.longitude))
+                    } else {
+                        try {
+                            val fused = com.google.android.gms.location.LocationServices.getFusedLocationProviderClient(context)
+                            fused.lastLocation.addOnSuccessListener { loc ->
+                                if (loc != null) {
+                                    mapViewRef?.controller?.setZoom(17.0)
+                                    mapViewRef?.controller?.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                                }
+                            }
+                        } catch (_: SecurityException) {}
+                    }
+                },
+                shape = CircleShape,
+                color = colors.cardElevated.copy(alpha = 0.95f),
+                border = borderStroke(if (currentLocation != null) colors.primaryAccent else colors.border),
+                modifier = Modifier.size(42.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (isFollowingRider && currentLocation != null) Icons.Default.MyLocation else Icons.Default.LocationSearching,
+                        contentDescription = "Center on My Location",
+                        tint = if (currentLocation != null) colors.primaryAccent else colors.secondaryText,
+                        modifier = Modifier.size(22.dp)
+                    )
                 }
             }
         }

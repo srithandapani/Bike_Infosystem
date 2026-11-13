@@ -68,6 +68,7 @@ fun DashboardMainScreen(
     onPreviousTrack: () -> Unit,
     onSeekTrack: (Long) -> Unit,
     onLaunchMusicApp: (String) -> Unit,
+    onOpenNotificationAccess: () -> Unit = {},
     onStartNavigation: (String) -> Unit,
     onStartPlaceNavigation: (PlaceSearchResult) -> Unit = {},
     onCancelNavigation: () -> Unit,
@@ -131,7 +132,10 @@ fun DashboardMainScreen(
                 satellitesCount = if (speedUiState.hasGpsFix) 12 else 0,
                 iphoneBleState = iphoneBleState,
                 weatherState = weatherUiState,
-                isRidingMode = isMoving
+                isRidingMode = isMoving,
+                isBluetoothEnabled = connectivityUiState.isBluetoothEnabled,
+                isBluetoothConnected = connectivityUiState.isConnected,
+                connectedDeviceName = connectivityUiState.connectedDeviceName
             )
 
             // MAIN COCKPIT VIEWPORT
@@ -209,7 +213,12 @@ fun DashboardMainScreen(
                                                 mediaUiState.copy(
                                                     title = iphoneTrack.title,
                                                     artist = iphoneTrack.artist,
-                                                    album = iphoneTrack.album
+                                                    album = iphoneTrack.album,
+                                                    isPlaying = iphoneTrack.isPlaying,
+                                                    durationMs = if (iphoneTrack.durationSeconds > 0) iphoneTrack.durationSeconds * 1000L else mediaUiState.durationMs,
+                                                    isConnected = true,
+                                                    connectedDeviceName = iphoneBleState.deviceName,
+                                                    sourceApp = "Apple Music • iPhone"
                                                 )
                                             } else {
                                                 mediaUiState
@@ -230,7 +239,12 @@ fun DashboardMainScreen(
                                     mediaUiState.copy(
                                         title = iphoneTrack.title,
                                         artist = iphoneTrack.artist,
-                                        album = iphoneTrack.album
+                                        album = iphoneTrack.album,
+                                        isPlaying = iphoneTrack.isPlaying,
+                                        durationMs = if (iphoneTrack.durationSeconds > 0) iphoneTrack.durationSeconds * 1000L else mediaUiState.durationMs,
+                                        isConnected = true,
+                                        connectedDeviceName = iphoneBleState.deviceName,
+                                        sourceApp = "Apple Music • iPhone"
                                     )
                                 } else {
                                     mediaUiState
@@ -239,7 +253,8 @@ fun DashboardMainScreen(
                                 onNext = onNextTrack,
                                 onPrevious = onPreviousTrack,
                                 onSeekTo = onSeekTrack,
-                                onLaunchMusicApp = onLaunchMusicApp
+                                onLaunchMusicApp = onLaunchMusicApp,
+                                onOpenNotificationAccess = onOpenNotificationAccess
                             )
                         }
 

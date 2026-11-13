@@ -48,6 +48,38 @@ class AppleBleManager(private val context: Context) {
     private val ancsDataBuffer = ByteArrayOutputStream()
     private var expectedAttributeBytes = 0
 
+    // Sequential GATT execution queue
+    private val gattQueue = java.util.concurrent.ConcurrentLinkedQueue<Runnable>()
+    @Volatile
+    private var isQueueBusy = false
+
+    private fun enqueueGatt(action: () -> Unit) {
+        gattQueue.add(Runnable { action() })
+        processNextGatt()
+    }
+
+    private fun processNextGatt() {
+        synchronized(gattQueue) {
+            if (isQueueBusy) return
+            val next = gattQueue.poll() ?: return
+            isQueueBusy = true
+            try {
+                next.run()
+            } catch (e: Exception) {
+                Log.e(tag, "Error running GATT operation", e)
+                isQueueBusy = false
+                processNextGatt()
+            }
+        }
+    }
+
+    private fun advanceGattQueue() {
+        synchronized(gattQueue) {
+            isQueueBusy = false
+            processNextGatt()
+        }
+    }
+
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
@@ -75,6 +107,10 @@ class AppleBleManager(private val context: Context) {
                     }
                     isSubscribedToAncs = false
                     isSubscribedToAms = false
+                    synchronized(gattQueue) {
+                        gattQueue.clear()
+                        isQueueBusy = false
+                    }
                 }
             }
         }
@@ -96,14 +132,33 @@ class AppleBleManager(private val context: Context) {
                 ancsFound = true
                 ancsControlPointChar = ancsService.getCharacteristic(AppleBleConstants.ANCS_CONTROL_POINT_UUID)
                 val notifSource = ancsService.getCharacteristic(AppleBleConstants.ANCS_NOTIFICATION_SOURCE_UUID)
+                val dataSource = ancsService.getCharacteristic(AppleBleConstants.ANCS_DATA_SOURCE_UUID)
 
                 if (notifSource != null) {
-                    gatt.setCharacteristicNotification(notifSource, true)
-                    val descriptor = notifSource.getDescriptor(AppleBleConstants.CCCD_UUID)
-                    descriptor?.let {
-                        @Suppress("DEPRECATION")
-                        it.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                        gatt.writeDescriptor(it)
+                    enqueueGatt {
+                        gatt.setCharacteristicNotification(notifSource, true)
+                        val descriptor = notifSource.getDescriptor(AppleBleConstants.CCCD_UUID)
+                        if (descriptor != null) {
+                            @Suppress("DEPRECATION")
+                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                            gatt.writeDescriptor(descriptor)
+                        } else {
+                            advanceGattQueue()
+                        }
+                    }
+                }
+
+                if (dataSource != null) {
+                    enqueueGatt {
+                        gatt.setCharacteristicNotification(dataSource, true)
+                        val descriptor = dataSource.getDescriptor(AppleBleConstants.CCCD_UUID)
+                        if (descriptor != null) {
+                            @Suppress("DEPRECATION")
+                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                            gatt.writeDescriptor(descriptor)
+                        } else {
+                            advanceGattQueue()
+                        }
                     }
                 }
             }
@@ -111,7 +166,46 @@ class AppleBleManager(private val context: Context) {
             if (amsService != null) {
                 amsFound = true
                 amsRemoteCommandChar = amsService.getCharacteristic(AppleBleConstants.AMS_REMOTE_COMMAND_UUID)
-                amsEntityUpdateChar = amsService.getCharacteristic(AppleBleConstants.AMS_ENTITY_UPDATE_UUID)
+                val entityUpdate = amsService.getCharacteristic(AppleBleConstants.AMS_ENTITY_UPDATE_UUID)
+                amsEntityUpdateChar = entityUpdate
+
+                if (entityUpdate != null) {
+                    // 1. Enable notifications on AMS Entity Update
+                    enqueueGatt {
+                        gatt.setCharacteristicNotification(entityUpdate, true)
+                        val descriptor = entityUpdate.getDescriptor(AppleBleConstants.CCCD_UUID)
+                        if (descriptor != null) {
+                            @Suppress("DEPRECATION")
+                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+                            gatt.writeDescriptor(descriptor)
+                        } else {
+                            advanceGattQueue()
+                        }
+                    }
+
+                    // 2. Subscribe to Track attributes: Title (2), Artist (0), Album (1), Duration (3)
+                    enqueueGatt {
+                        @Suppress("DEPRECATION")
+                        entityUpdate.value = byteArrayOf(
+                            AppleBleConstants.ENTITY_ID_TRACK,
+                            AppleBleConstants.TRACK_ATTR_TITLE,
+                            AppleBleConstants.TRACK_ATTR_ARTIST,
+                            AppleBleConstants.TRACK_ATTR_ALBUM,
+                            AppleBleConstants.TRACK_ATTR_DURATION
+                        )
+                        gatt.writeCharacteristic(entityUpdate)
+                    }
+
+                    // 3. Subscribe to Player attributes: PlaybackInfo (1)
+                    enqueueGatt {
+                        @Suppress("DEPRECATION")
+                        entityUpdate.value = byteArrayOf(
+                            AppleBleConstants.ENTITY_ID_PLAYER,
+                            1.toByte() // PlaybackInfo
+                        )
+                        gatt.writeCharacteristic(entityUpdate)
+                    }
+                }
             }
 
             _connectionState.update {
@@ -121,6 +215,16 @@ class AppleBleManager(private val context: Context) {
                     statusMessage = if (ancsFound && amsFound) "iPhone ANCS Notifications & Music Ready" else "Connected to iPhone"
                 )
             }
+        }
+
+        override fun onDescriptorWrite(gatt: BluetoothGatt?, descriptor: BluetoothGattDescriptor?, status: Int) {
+            super.onDescriptorWrite(gatt, descriptor, status)
+            advanceGattQueue()
+        }
+
+        override fun onCharacteristicWrite(gatt: BluetoothGatt?, characteristic: BluetoothGattCharacteristic?, status: Int) {
+            super.onCharacteristicWrite(gatt, characteristic, status)
+            advanceGattQueue()
         }
 
         override fun onCharacteristicChanged(
@@ -267,7 +371,7 @@ class AppleBleManager(private val context: Context) {
     }
 
     /**
-     * Handles track updates from Apple Media Service (AMS)
+     * Handles track and playback updates from Apple Media Service (AMS)
      */
     private fun handleAmsEntityUpdate(data: ByteArray) {
         if (data.size < 3) return
@@ -281,9 +385,19 @@ class AppleBleManager(private val context: Context) {
                     AppleBleConstants.TRACK_ATTR_TITLE -> current.copy(title = textValue)
                     AppleBleConstants.TRACK_ATTR_ARTIST -> current.copy(artist = textValue)
                     AppleBleConstants.TRACK_ATTR_ALBUM -> current.copy(album = textValue)
+                    AppleBleConstants.TRACK_ATTR_DURATION -> {
+                        val dur = textValue.toDoubleOrNull()?.toInt() ?: current.durationSeconds
+                        current.copy(durationSeconds = dur)
+                    }
                     else -> current
                 }
             }
+        } else if (entityId == AppleBleConstants.ENTITY_ID_PLAYER) {
+            // PlaybackInfo string: "PlaybackState,PlaybackRate,ElapsedTime"
+            val parts = textValue.split(",")
+            val playbackState = parts.firstOrNull()?.trim()?.toIntOrNull()
+            val isPlaying = playbackState == 1
+            _trackInfo.update { it.copy(isPlaying = isPlaying) }
         }
     }
 

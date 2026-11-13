@@ -1,11 +1,17 @@
 package com.motodrive.tft.connectivity
 
+import android.annotation.SuppressLint
 import android.app.Application
+import android.bluetooth.BluetoothA2dp
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothDevice
+import android.bluetooth.BluetoothHeadset
 import android.bluetooth.BluetoothManager
+import android.bluetooth.BluetoothProfile
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.net.Uri
@@ -27,13 +33,10 @@ data class ConnectedBtDevice(
 )
 
 data class ConnectivityUiState(
-    val isBluetoothEnabled: Boolean = true,
-    val connectedDeviceName: String = "Cardo Packtalk Edge",
-    val pairedDevices: List<ConnectedBtDevice> = listOf(
-        ConnectedBtDevice("Cardo Packtalk Edge", "00:1B:44:11:3A:B7", true, true),
-        ConnectedBtDevice("Sena 50S Helmet", "AA:BB:CC:DD:EE:01", false, true),
-        ConnectedBtDevice("BMW OBDLink LX", "11:22:33:44:55:66", false, false)
-    ),
+    val isBluetoothEnabled: Boolean = false,
+    val isConnected: Boolean = false,
+    val connectedDeviceName: String = "No Device Connected",
+    val pairedDevices: List<ConnectedBtDevice> = emptyList(),
     val networkType: String = "5G LTE",
     val isNetworkConnected: Boolean = true,
     val incomingCallerName: String? = null,
@@ -41,6 +44,7 @@ data class ConnectivityUiState(
     val isCallActive: Boolean = false
 )
 
+@SuppressLint("MissingPermission")
 class ConnectivityViewModel(application: Application) : AndroidViewModel(application) {
 
     private val bluetoothManager = application.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
@@ -48,51 +52,148 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
     private val telephonyManager = application.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
     private val connectivityManager = application.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
 
+    private var a2dpProfile: BluetoothA2dp? = null
+    private var headsetProfile: BluetoothHeadset? = null
+
     private val _uiState = MutableStateFlow(ConnectivityUiState())
     val uiState: StateFlow<ConnectivityUiState> = _uiState.asStateFlow()
 
+    private val profileListener = object : BluetoothProfile.ServiceListener {
+        override fun onServiceConnected(profile: Int, proxy: BluetoothProfile) {
+            when (profile) {
+                BluetoothProfile.A2DP -> a2dpProfile = proxy as? BluetoothA2dp
+                BluetoothProfile.HEADSET -> headsetProfile = proxy as? BluetoothHeadset
+            }
+            refreshBluetoothState()
+        }
+
+        override fun onServiceDisconnected(profile: Int) {
+            when (profile) {
+                BluetoothProfile.A2DP -> a2dpProfile = null
+                BluetoothProfile.HEADSET -> headsetProfile = null
+            }
+            refreshBluetoothState()
+        }
+    }
+
+    private val btReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            val action = intent?.action ?: return
+            when (action) {
+                BluetoothAdapter.ACTION_STATE_CHANGED -> {
+                    val state = intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)
+                    val isEnabled = state == BluetoothAdapter.STATE_ON
+                    _uiState.update {
+                        it.copy(
+                            isBluetoothEnabled = isEnabled,
+                            isConnected = if (!isEnabled) false else it.isConnected,
+                            connectedDeviceName = if (!isEnabled) "Bluetooth Disabled" else it.connectedDeviceName
+                        )
+                    }
+                    if (isEnabled) {
+                        refreshBluetoothState()
+                    }
+                }
+                BluetoothDevice.ACTION_ACL_CONNECTED,
+                BluetoothDevice.ACTION_ACL_DISCONNECTED,
+                BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED,
+                BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED -> {
+                    refreshBluetoothState()
+                }
+            }
+        }
+    }
+
     init {
+        registerBluetoothReceiver()
+        bindBluetoothProfiles()
         refreshBluetoothState()
         refreshNetworkState()
         registerPhoneStateListener()
     }
 
+    private fun registerBluetoothReceiver() {
+        val filter = IntentFilter().apply {
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(BluetoothDevice.ACTION_ACL_CONNECTED)
+            addAction(BluetoothDevice.ACTION_ACL_DISCONNECTED)
+            addAction(BluetoothA2dp.ACTION_CONNECTION_STATE_CHANGED)
+            addAction(BluetoothHeadset.ACTION_CONNECTION_STATE_CHANGED)
+        }
+        getApplication<Application>().registerReceiver(btReceiver, filter)
+    }
+
+    private fun bindBluetoothProfiles() {
+        try {
+            bluetoothAdapter?.getProfileProxy(getApplication(), profileListener, BluetoothProfile.A2DP)
+            bluetoothAdapter?.getProfileProxy(getApplication(), profileListener, BluetoothProfile.HEADSET)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
     fun refreshBluetoothState() {
-        val adapter = bluetoothAdapter ?: return
-        val isEnabled = adapter.isEnabled
+        val adapter = bluetoothAdapter
+        val isEnabled = adapter?.isEnabled == true
         val paired = mutableListOf<ConnectedBtDevice>()
 
+        if (!isEnabled) {
+            _uiState.update {
+                it.copy(
+                    isBluetoothEnabled = false,
+                    isConnected = false,
+                    connectedDeviceName = "Bluetooth Off",
+                    pairedDevices = emptyList()
+                )
+            }
+            return
+        }
+
+        var connectedDevice: BluetoothDevice? = null
+
         try {
-            if (isEnabled) {
-                val bonded = adapter.bondedDevices
-                bonded?.forEach { dev ->
-                    val name = dev.name ?: "Bluetooth Device"
-                    val isHelmet = name.contains("Cardo", ignoreCase = true) ||
-                            name.contains("Sena", ignoreCase = true) ||
-                            name.contains("Helmet", ignoreCase = true) ||
-                            name.contains("Headset", ignoreCase = true)
-                    paired.add(
-                        ConnectedBtDevice(
-                            name = name,
-                            address = dev.address,
-                            isConnected = false,
-                            isHelmet = isHelmet
-                        )
+            // Check actively connected A2DP and Headset devices
+            val connectedA2dp = a2dpProfile?.connectedDevices.orEmpty()
+            val connectedHeadset = headsetProfile?.connectedDevices.orEmpty()
+            val allConnected = (connectedA2dp + connectedHeadset).distinctBy { it.address }
+            connectedDevice = allConnected.firstOrNull()
+
+            val bonded = adapter?.bondedDevices
+            bonded?.forEach { dev ->
+                val name = dev.name ?: "Bluetooth Device"
+                val isHelmet = name.contains("Cardo", ignoreCase = true) ||
+                        name.contains("Sena", ignoreCase = true) ||
+                        name.contains("Helmet", ignoreCase = true) ||
+                        name.contains("Headset", ignoreCase = true)
+                val isConnected = allConnected.any { it.address == dev.address }
+
+                paired.add(
+                    ConnectedBtDevice(
+                        name = name,
+                        address = dev.address,
+                        isConnected = isConnected,
+                        isHelmet = isHelmet
                     )
-                }
+                )
             }
         } catch (e: SecurityException) {
             e.printStackTrace()
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
 
-        if (paired.isNotEmpty()) {
-            _uiState.update {
-                it.copy(
-                    isBluetoothEnabled = isEnabled,
-                    pairedDevices = paired,
-                    connectedDeviceName = paired.firstOrNull()?.name ?: "Motorcycle Audio"
-                )
-            }
+        val hasConnected = connectedDevice != null || paired.any { it.isConnected }
+        val devName = connectedDevice?.name
+            ?: paired.firstOrNull { it.isConnected }?.name
+            ?: if (paired.isNotEmpty()) "Ready to Connect" else "No Devices Paired"
+
+        _uiState.update {
+            it.copy(
+                isBluetoothEnabled = true,
+                isConnected = hasConnected,
+                connectedDeviceName = devName,
+                pairedDevices = paired
+            )
         }
     }
 
@@ -182,6 +283,17 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        try {
+            getApplication<Application>().unregisterReceiver(btReceiver)
+        } catch (_: Exception) {}
+        try {
+            a2dpProfile?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.A2DP, it) }
+            headsetProfile?.let { bluetoothAdapter?.closeProfileProxy(BluetoothProfile.HEADSET, it) }
+        } catch (_: Exception) {}
     }
 }
 

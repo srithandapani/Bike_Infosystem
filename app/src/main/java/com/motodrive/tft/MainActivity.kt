@@ -56,7 +56,8 @@ class MainActivity : FragmentActivity() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
         val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
-        if (fineLocationGranted) {
+        val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+        if (fineLocationGranted || coarseLocationGranted) {
             speedometerViewModel.startLocationUpdates()
             navigationViewModel.initNavigator(this@MainActivity)
         }
@@ -110,6 +111,30 @@ class MainActivity : FragmentActivity() {
                     st.errorMessage?.let {
                         android.widget.Toast.makeText(this@MainActivity, it, android.widget.Toast.LENGTH_LONG).show()
                         navigationViewModel.clearError()
+                    }
+                }
+            }
+        }
+
+        // Sync Bluetooth & iPhone connection state to MediaViewModel
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    connectivityViewModel.uiState.collect { conn ->
+                        val iphoneConnected = appleBleManager.connectionState.value.isConnected
+                        val isConnected = conn.isConnected || iphoneConnected
+                        val devName = if (iphoneConnected) appleBleManager.connectionState.value.deviceName else conn.connectedDeviceName
+                        mediaViewModel.updateBluetoothStatus(isConnected, devName)
+                    }
+                }
+                launch {
+                    appleBleManager.connectionState.collect { iphoneState ->
+                        if (iphoneState.isConnected) {
+                            mediaViewModel.updateBluetoothStatus(true, iphoneState.deviceName)
+                        } else {
+                            val conn = connectivityViewModel.uiState.value
+                            mediaViewModel.updateBluetoothStatus(conn.isConnected, conn.connectedDeviceName)
+                        }
                     }
                 }
             }
@@ -180,6 +205,7 @@ class MainActivity : FragmentActivity() {
                         },
                         onSeekTrack = { mediaViewModel.seekTo(it) },
                         onLaunchMusicApp = { mediaViewModel.launchMusicApp(it) },
+                        onOpenNotificationAccess = { mediaViewModel.openNotificationSettings(this@MainActivity) },
                         onStartNavigation = { navigationViewModel.startNavigation(it) },
                         onStartPlaceNavigation = { navigationViewModel.startNavigationToPlace(it) },
                         onCancelNavigation = { navigationViewModel.cancelNavigation() },
@@ -291,6 +317,12 @@ class MainActivity : FragmentActivity() {
             appleBleManager.connectToBondedIphone()
             navigationViewModel.initNavigator(this)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        connectivityViewModel.refreshBluetoothState()
+        mediaViewModel.refreshNotificationAccess()
     }
 
     override fun onDestroy() {
