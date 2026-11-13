@@ -1,11 +1,14 @@
 package com.motodrive.tft.navigation
 
+import android.graphics.ColorMatrix
+import android.graphics.ColorMatrixColorFilter
+import android.graphics.Paint
 import android.location.Location
-import android.view.View
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +21,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.AltRoute
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,14 +34,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
-import androidx.fragment.app.FragmentActivity
-import androidx.fragment.app.commit
-import androidx.fragment.app.FragmentContainerView
-import com.google.android.gms.maps.GoogleMap
-import com.google.android.libraries.navigation.ForceNightMode
-import com.google.android.libraries.navigation.SupportNavigationFragment
 import com.motodrive.tft.core.components.GlowCard
 import com.motodrive.tft.core.theme.*
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.BoundingBox
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Marker
+import org.osmdroid.views.overlay.Polyline
+
+private fun borderStroke(color: Color) = BorderStroke(1.dp, color)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,9 +60,15 @@ fun NavigationMapView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val activity = context as? FragmentActivity
+    var mapViewRef by remember { mutableStateOf<MapView?>(null) }
+    var userMarkerRef by remember { mutableStateOf<Marker?>(null) }
+    var destMarkerRef by remember { mutableStateOf<Marker?>(null) }
+    var routePolylineRef by remember { mutableStateOf<Polyline?>(null) }
+
     var isSearchExpanded by remember { mutableStateOf(false) }
-    var navFragmentRef by remember { mutableStateOf<SupportNavigationFragment?>(null) }
+    var searchInput by remember { mutableStateOf("") }
+    var isFollowingRider by remember { mutableStateOf(true) }
+
     val isMoving = currentSpeedKmH > 5.0f
 
     // Safety lockout: close search keyboard if rider starts moving > 5 km/h
@@ -67,6 +79,82 @@ fun NavigationMapView(
         }
     }
 
+    // Update vehicle marker & camera tracking when location changes
+    LaunchedEffect(currentLocation, isFollowingRider) {
+        val map = mapViewRef ?: return@LaunchedEffect
+        if (currentLocation != null) {
+            val geoPoint = GeoPoint(currentLocation.latitude, currentLocation.longitude)
+            if (userMarkerRef == null) {
+                val marker = Marker(map).apply {
+                    position = geoPoint
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                    title = "TVS Ronin 225"
+                }
+                map.overlays.add(marker)
+                userMarkerRef = marker
+                map.controller.setZoom(16.5)
+                map.controller.setCenter(geoPoint)
+            } else {
+                userMarkerRef?.position = geoPoint
+                if (currentLocation.hasBearing()) {
+                    userMarkerRef?.rotation = currentLocation.bearing
+                }
+            }
+
+            if (isFollowingRider && !uiState.isOverviewMode) {
+                map.controller.animateTo(geoPoint)
+            }
+            map.invalidate()
+        }
+    }
+
+    // Update Route Polyline & Destination Marker on the embedded map
+    LaunchedEffect(uiState.routePoints, uiState.destinationPoint) {
+        val map = mapViewRef ?: return@LaunchedEffect
+
+        // Remove previous route polyline if any
+        routePolylineRef?.let { map.overlays.remove(it) }
+        routePolylineRef = null
+
+        // Remove previous destination marker if any
+        destMarkerRef?.let { map.overlays.remove(it) }
+        destMarkerRef = null
+
+        if (uiState.isNavigating && uiState.routePoints.isNotEmpty()) {
+            // Draw glowing TVS Ronin Neon Purple in-app route polyline
+            val polyline = Polyline(map).apply {
+                outlinePaint.color = android.graphics.Color.parseColor("#A855F7")
+                outlinePaint.strokeWidth = 14f
+                outlinePaint.strokeCap = Paint.Cap.ROUND
+                outlinePaint.strokeJoin = Paint.Join.ROUND
+                outlinePaint.isAntiAlias = true
+                setPoints(uiState.routePoints)
+            }
+            map.overlays.add(0, polyline)
+            routePolylineRef = polyline
+
+            // Add in-app destination marker pin
+            uiState.destinationPoint?.let { destPt ->
+                val destMarker = Marker(map).apply {
+                    position = destPt
+                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
+                    title = uiState.destinationName
+                }
+                map.overlays.add(destMarker)
+                destMarkerRef = destMarker
+            }
+
+            // Route Overview auto-fit
+            if (uiState.isOverviewMode || uiState.isRouteLoading) {
+                try {
+                    val box = BoundingBox.fromGeoPoints(uiState.routePoints)
+                    map.zoomToBoundingBox(box, true, 80)
+                } catch (_: Exception) {}
+            }
+        }
+        map.invalidate()
+    }
+
     Box(
         modifier = modifier
             .fillMaxSize()
@@ -74,57 +162,42 @@ fun NavigationMapView(
             .background(Color.Black)
             .border(1.dp, ThinBorderColor, RoundedCornerShape(16.dp))
     ) {
-        // Embedded Google Maps Navigation SDK Fragment (Landscape, AMOLED Night Mode)
-        if (activity != null) {
-            val containerId = remember { View.generateViewId() }
+        // Embedded High-Performance In-App Map Canvas (AMOLED Dark Tiles, Zero External Redirects)
+        AndroidView(
+            factory = { ctx ->
+                MapView(ctx).apply {
+                    setTileSource(TileSourceFactory.MAPNIK)
+                    setMultiTouchControls(true)
+                    isTilesScaledToDpi = true
+                    minZoomLevel = 4.0
+                    maxZoomLevel = 20.0
+                    controller.setZoom(16.0)
 
-            AndroidView(
-                factory = { ctx ->
-                    FragmentContainerView(ctx).apply {
-                        id = containerId
+                    // Pure AMOLED Black High-Contrast Filter
+                    val matrix = ColorMatrix().apply {
+                        set(floatArrayOf(
+                            -0.85f, 0f, 0f, 0f, 230f,
+                            0f, -0.85f, 0f, 0f, 230f,
+                            0f, 0f, -0.85f, 0f, 230f,
+                            0f, 0f, 0f, 1f, 0f
+                        ))
                     }
-                },
-                update = {
-                    val fragmentManager = activity.supportFragmentManager
-                    var fragment = fragmentManager.findFragmentById(containerId) as? SupportNavigationFragment
-                    if (fragment == null) {
-                        fragment = SupportNavigationFragment.newInstance()
-                        fragmentManager.commit {
-                            replace(containerId, fragment)
-                        }
-                    }
-                    navFragmentRef = fragment
+                    overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(matrix))
 
-                    try {
-                        fragment.setForceNightMode(ForceNightMode.FORCE_NIGHT)
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    val startLoc = currentLocation
+                    val startGeo = if (startLoc != null) {
+                        GeoPoint(startLoc.latitude, startLoc.longitude)
+                    } else {
+                        GeoPoint(12.9716, 77.5946)
                     }
+                    controller.setCenter(startGeo)
 
-                    fragment.getMapAsync { googleMap ->
-                        // Force cinematic AMOLED dark mode and follow rider
-                        try {
-                            googleMap.followMyLocation(GoogleMap.CameraPerspective.TILTED)
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxSize()
-            )
-        } else {
-            // Fallback display if not hosted in a FragmentActivity
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Google Navigation View Engine Ready",
-                    style = MotoDriveTypography.bodyMedium,
-                    color = SecondaryText
-                )
-            }
-        }
+                    mapViewRef = this
+                }
+            },
+            update = { /* Updates handled reactively via LaunchedEffects */ },
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Top Navigation Bar: Quick Destination Chips & Search Trigger
         AnimatedVisibility(
@@ -134,305 +207,298 @@ fun NavigationMapView(
             modifier = Modifier
                 .align(Alignment.TopCenter)
                 .fillMaxWidth()
-                .padding(12.dp)
+                .padding(8.dp)
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Glove-friendly Search Trigger (56dp minimum touch height)
-                Box(
-                    modifier = Modifier
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(CardBackgroundElevated)
-                        .border(1.dp, ElectricBlue, RoundedCornerShape(22.dp))
-                        .clickable { isSearchExpanded = true }
-                        .padding(horizontal = 14.dp),
-                    contentAlignment = Alignment.Center
+                // Search Trigger Pill
+                Surface(
+                    onClick = { isSearchExpanded = true },
+                    shape = RoundedCornerShape(20.dp),
+                    color = CardBackgroundElevated.copy(alpha = 0.92f),
+                    border = borderStroke(ElectricBlue),
+                    modifier = Modifier.height(36.dp)
                 ) {
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
                             tint = ElectricBlue,
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
+                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Search Destination",
-                            style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold, fontSize = 12.sp),
+                            style = MotoDriveTypography.labelMedium,
                             color = PrimaryText
                         )
                     }
                 }
 
-                // Voice Assistant Button (>= 56dp hit target)
-                Box(
-                    modifier = Modifier
-                        .size(44.dp)
-                        .clip(CircleShape)
-                        .background(CardBackgroundElevated)
-                        .border(1.dp, RoninElectricViolet, CircleShape)
-                        .clickable { onVoiceClick() },
-                    contentAlignment = Alignment.Center
+                // Voice Command Button
+                Surface(
+                    onClick = onVoiceClick,
+                    shape = CircleShape,
+                    color = RoninNeonPurple.copy(alpha = 0.25f),
+                    border = borderStroke(RoninNeonPurple),
+                    modifier = Modifier.size(36.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Mic,
-                        contentDescription = "Voice Search",
-                        tint = RoninElectricViolet,
-                        modifier = Modifier.size(20.dp)
-                    )
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Mic,
+                            contentDescription = "Voice",
+                            tint = RoninNeonPurple,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
                 }
 
-                // Quick Destinations: Petrol Pump, Motorcycle Service, Home, Work
+                // Quick Action Chips
                 uiState.quickDestinations.forEach { dest ->
-                    Box(
-                        modifier = Modifier
-                            .height(44.dp)
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(CardBackground)
-                            .border(1.dp, ThinBorderColor, RoundedCornerShape(22.dp))
-                            .clickable { onStartNavigation(dest.title) }
-                            .padding(horizontal = 14.dp),
-                        contentAlignment = Alignment.Center
+                    val icon = when (dest.iconType) {
+                        "GAS" -> Icons.Default.LocalGasStation
+                        "WRENCH" -> Icons.Default.Build
+                        "HOME" -> Icons.Default.Home
+                        "WORK" -> Icons.Default.Work
+                        else -> Icons.Default.Place
+                    }
+                    val iconColor = when (dest.iconType) {
+                        "GAS" -> Color(0xFFF59E0B)
+                        "WRENCH" -> Color(0xFF38BDF8)
+                        "HOME" -> Color(0xFF34D399)
+                        "WORK" -> Color(0xFFA78BFA)
+                        else -> RoninNeonPurple
+                    }
+
+                    Surface(
+                        onClick = {
+                            isFollowingRider = true
+                            onStartNavigation(dest.query)
+                        },
+                        shape = RoundedCornerShape(20.dp),
+                        color = CardBackgroundElevated.copy(alpha = 0.92f),
+                        border = borderStroke(ThinBorderColor),
+                        modifier = Modifier.height(36.dp)
                     ) {
                         Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            modifier = Modifier.padding(horizontal = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = when (dest.iconType) {
-                                    "GAS" -> Icons.Default.LocalGasStation
-                                    "WRENCH" -> Icons.Default.Build
-                                    "HOME" -> Icons.Default.Home
-                                    "WORK" -> Icons.Default.Work
-                                    else -> Icons.Default.Place
-                                },
-                                contentDescription = dest.title,
-                                tint = if (dest.iconType == "GAS") WarningOrange else ElectricBlue,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Text(
-                                text = dest.title,
-                                style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 12.sp),
-                                color = PrimaryText
-                            )
+                            Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(15.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(dest.title, style = MotoDriveTypography.labelSmall, color = PrimaryText)
                         }
                     }
                 }
 
-                // Save Current Location Buttons for Home and Work
-                Box(
-                    modifier = Modifier
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(CardBackground)
-                        .border(1.dp, RoninNeonPurple.copy(alpha = 0.5f), RoundedCornerShape(22.dp))
-                        .clickable { onSaveLocationAs("home") }
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
+                // Save Location Chips
+                Surface(
+                    onClick = { onSaveLocationAs("home") },
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Black.copy(alpha = 0.6f),
+                    border = borderStroke(ThinBorderColor),
+                    modifier = Modifier.height(36.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.AddLocation, contentDescription = null, tint = RoninElectricViolet, modifier = Modifier.size(15.dp))
-                        Text("Set as Home", style = MotoDriveTypography.labelSmall.copy(fontSize = 11.sp), color = RoninElectricViolet)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AddLocation, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Set as Home", style = MotoDriveTypography.labelSmall, color = SecondaryText)
                     }
                 }
 
-                Box(
-                    modifier = Modifier
-                        .height(44.dp)
-                        .clip(RoundedCornerShape(22.dp))
-                        .background(CardBackground)
-                        .border(1.dp, RoninNeonPurple.copy(alpha = 0.5f), RoundedCornerShape(22.dp))
-                        .clickable { onSaveLocationAs("work") }
-                        .padding(horizontal = 12.dp),
-                    contentAlignment = Alignment.Center
+                Surface(
+                    onClick = { onSaveLocationAs("work") },
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color.Black.copy(alpha = 0.6f),
+                    border = borderStroke(ThinBorderColor),
+                    modifier = Modifier.height(36.dp)
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Icon(Icons.Default.AddLocation, contentDescription = null, tint = RoninElectricViolet, modifier = Modifier.size(15.dp))
-                        Text("Set as Work", style = MotoDriveTypography.labelSmall.copy(fontSize = 11.sp), color = RoninElectricViolet)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AddLocation, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Set as Work", style = MotoDriveTypography.labelSmall, color = SecondaryText)
                     }
                 }
             }
         }
 
-        // Active Turn Guidance HUD Banner (Cinematic Floating Header)
+        // Active Navigation Controls (Bottom of map)
         if (uiState.isNavigating) {
-            GlowCard(
+            Row(
                 modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(12.dp)
-                    .widthIn(max = 380.dp),
-                backgroundColor = Color(0xDD000000),
-                borderColor = RoninNeonPurple.copy(alpha = 0.8f)
+                    .align(Alignment.BottomStart)
+                    .padding(10.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(14.dp)
+                // Cancel Navigation Button
+                Surface(
+                    onClick = onCancelNavigation,
+                    shape = RoundedCornerShape(12.dp),
+                    color = AlertRed.copy(alpha = 0.2f),
+                    border = borderStroke(AlertRed),
+                    modifier = Modifier.height(38.dp)
                 ) {
-                    // Animated Turn Direction Icon
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(RoninNeonPurple.copy(alpha = 0.2f))
-                            .border(1.5.dp, RoninNeonPurple, CircleShape),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(
-                            imageVector = when (uiState.nextTurnDirection) {
-                                TurnDirection.TURN_LEFT -> Icons.Default.TurnLeft
-                                TurnDirection.TURN_RIGHT -> Icons.Default.TurnRight
-                                TurnDirection.SHARP_LEFT -> Icons.Default.TurnSharpLeft
-                                TurnDirection.SHARP_RIGHT -> Icons.Default.TurnSharpRight
-                                TurnDirection.SLIGHT_LEFT -> Icons.Default.TurnSlightLeft
-                                TurnDirection.SLIGHT_RIGHT -> Icons.Default.TurnSlightRight
-                                TurnDirection.U_TURN -> Icons.Default.Refresh
-                                TurnDirection.ROUNDABOUT -> Icons.Default.Refresh
-                                TurnDirection.DESTINATION -> Icons.Default.CheckCircle
-                                else -> Icons.Default.Straight
-                            },
-                            contentDescription = "Turn Direction",
-                            tint = ElectricBlue,
-                            modifier = Modifier.size(28.dp)
-                        )
+                        Icon(Icons.Default.Close, contentDescription = null, tint = AlertRed, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("END NAV", style = MotoDriveTypography.labelMedium, color = PrimaryText, fontWeight = FontWeight.Bold)
                     }
+                }
 
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = uiState.distanceToNextTurn,
-                            style = MotoDriveTypography.headlineMedium.copy(fontWeight = FontWeight.Bold),
-                            color = PrimaryText
-                        )
-                        Text(
-                            text = uiState.nextRoadName.ifBlank { uiState.destinationName },
-                            style = MotoDriveTypography.bodyMedium.copy(fontSize = 13.sp),
-                            color = SecondaryText,
-                            maxLines = 1
-                        )
-                    }
-
-                    // Cancel Guidance Button
-                    IconButton(
-                        onClick = { onCancelNavigation() },
-                        modifier = Modifier.size(36.dp)
+                // Re-center Camera Button (shown if user panned away)
+                if (!isFollowingRider) {
+                    Surface(
+                        onClick = {
+                            isFollowingRider = true
+                            currentLocation?.let { loc ->
+                                mapViewRef?.controller?.animateTo(GeoPoint(loc.latitude, loc.longitude))
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = CardBackgroundElevated.copy(alpha = 0.9f),
+                        border = borderStroke(RoninNeonPurple),
+                        modifier = Modifier.height(38.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Cancel Navigation",
-                            tint = AlertRed,
-                            modifier = Modifier.size(20.dp)
-                        )
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = RoninNeonPurple, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("RE-CENTER", style = MotoDriveTypography.labelMedium, color = PrimaryText)
+                        }
                     }
                 }
             }
         }
 
-        // Full-screen Search Overlay with Autocomplete Predictions
+        // In-App Search Dialog Overlay (Never leaves the app)
         if (isSearchExpanded) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(Color(0xF0050508))
-                    .padding(16.dp)
+                    .background(PrimaryBackground.copy(alpha = 0.88f))
+                    .clickable { isSearchExpanded = false },
+                contentAlignment = Alignment.TopCenter
             ) {
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                GlowCard(
+                    modifier = Modifier
+                        .fillMaxWidth(0.85f)
+                        .padding(top = 16.dp),
+                    shape = RoundedCornerShape(14.dp),
+                    backgroundColor = CardBackgroundElevated,
+                    borderColor = RoninNeonPurple
                 ) {
-                    // Search Bar Header
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        IconButton(
-                            onClick = { isSearchExpanded = false },
-                            modifier = Modifier.size(48.dp)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = "Back",
-                                tint = PrimaryText
+                            Text(
+                                text = "SEARCH DESTINATION",
+                                style = MotoDriveTypography.labelLarge.copy(color = RoninNeonPurple, fontWeight = FontWeight.Bold)
                             )
+                            IconButton(onClick = { isSearchExpanded = false }, modifier = Modifier.size(28.dp)) {
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = SecondaryText)
+                            }
                         }
 
                         OutlinedTextField(
-                            value = uiState.searchQuery,
-                            onValueChange = { onSearchQueryChange(it) },
-                            placeholder = { Text("Search places or address via Google...", color = MutedText) },
+                            value = searchInput,
+                            onValueChange = {
+                                searchInput = it
+                                onSearchQueryChange(it)
+                            },
+                            placeholder = { Text("Search places, petrol pumps, addresses in India...", color = SecondaryText, fontSize = 13.sp) },
                             singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
                                 focusedTextColor = PrimaryText,
                                 unfocusedTextColor = PrimaryText,
-                                focusedBorderColor = ElectricBlue,
+                                focusedBorderColor = RoninNeonPurple,
                                 unfocusedBorderColor = ThinBorderColor,
-                                cursorColor = ElectricBlue
-                            ),
-                            trailingIcon = {
-                                IconButton(onClick = { onVoiceClick() }) {
-                                    Icon(Icons.Default.Mic, contentDescription = "Voice", tint = RoninElectricViolet)
-                                }
-                            },
-                            modifier = Modifier.weight(1f)
+                                cursorColor = RoninNeonPurple
+                            )
                         )
-                    }
 
-                    // Prediction Results List
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth().weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(uiState.searchResults) { place ->
-                            GlowCard(
+                        // Autocomplete Search Results
+                        if (uiState.searchResults.isNotEmpty()) {
+                            LazyColumn(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        isSearchExpanded = false
-                                        onStartPlaceNavigation(place)
-                                    },
-                                backgroundColor = CardBackground,
-                                borderColor = ThinBorderColor
+                                    .heightIn(max = 140.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Place,
-                                        contentDescription = null,
-                                        tint = RoninElectricViolet,
-                                        modifier = Modifier.size(24.dp)
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = place.primaryText,
-                                            style = MotoDriveTypography.titleMedium.copy(fontWeight = FontWeight.Bold),
-                                            color = PrimaryText
-                                        )
-                                        if (place.secondaryText.isNotBlank()) {
-                                            Text(
-                                                text = place.secondaryText,
-                                                style = MotoDriveTypography.bodySmall,
-                                                color = SecondaryText
-                                            )
+                                items(uiState.searchResults) { result ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                isFollowingRider = true
+                                                onStartPlaceNavigation(result)
+                                                isSearchExpanded = false
+                                            }
+                                            .padding(vertical = 8.dp, horizontal = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(Icons.Default.Place, contentDescription = null, tint = RoninNeonPurple, modifier = Modifier.size(16.dp))
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Column {
+                                            Text(result.primaryText, style = MotoDriveTypography.bodyMedium, color = PrimaryText, fontWeight = FontWeight.SemiBold)
+                                            if (result.secondaryText.isNotBlank()) {
+                                                Text(result.secondaryText, style = MotoDriveTypography.bodySmall, color = SecondaryText, maxLines = 1)
+                                            }
                                         }
                                     }
-                                    Icon(
-                                        imageVector = Icons.Default.Navigation,
-                                        contentDescription = "Navigate",
-                                        tint = ElectricBlue,
-                                        modifier = Modifier.size(20.dp)
-                                    )
+                                    HorizontalDivider(color = ThinBorderColor)
                                 }
+                            }
+                        }
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            TextButton(onClick = { isSearchExpanded = false }) {
+                                Text("CANCEL", color = SecondaryText)
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    if (searchInput.isNotBlank()) {
+                                        isFollowingRider = true
+                                        onStartNavigation(searchInput)
+                                        isSearchExpanded = false
+                                    }
+                                },
+                                colors = ButtonDefaults.buttonColors(containerColor = RoninNeonPurple),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Navigation, contentDescription = null, tint = PrimaryText, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text("START NAVIGATION", color = PrimaryText, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

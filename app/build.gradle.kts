@@ -98,6 +98,9 @@ dependencies {
         exclude(group = "com.google.android.gms", module = "play-services-maps")
     }
 
+    // Embedded Offline-Ready Vector/Raster Map Canvas (Zero-config in-app map fallback)
+    implementation("org.osmdroid:osmdroid-android:6.1.18")
+
     testImplementation("junit:junit:4.13.2")
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

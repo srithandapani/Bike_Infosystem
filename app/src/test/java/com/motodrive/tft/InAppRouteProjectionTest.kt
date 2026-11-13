@@ -60,4 +60,28 @@ class GoogleNavigationTest {
             else -> TurnDirection.STRAIGHT
         }
     }
+
+    @Test
+    fun testHaversineDistanceCalculation() {
+        // Bengaluru to Whitefield (~15 km)
+        val p1 = org.osmdroid.util.GeoPoint(12.9716, 77.5946)
+        val p2 = org.osmdroid.util.GeoPoint(12.9698, 77.7499)
+        val dist = com.motodrive.tft.navigation.haversine(p1, p2)
+        assertTrue(dist > 14000.0 && dist < 18000.0)
+    }
+
+    @Test
+    fun testActiveRouteCumulativeDistances() {
+        val geom = listOf(
+            org.osmdroid.util.GeoPoint(12.9716, 77.5946),
+            org.osmdroid.util.GeoPoint(12.9720, 77.5950),
+            org.osmdroid.util.GeoPoint(12.9730, 77.5960)
+        )
+        val path = com.motodrive.tft.navigation.RoutedPath(geom, 250.0, 30.0, emptyList())
+        val route = com.motodrive.tft.navigation.ActiveRoute("Test Route", geom.last(), path)
+        assertEquals(3, route.cumulative.size)
+        assertEquals(0.0, route.cumulative[0], 0.001)
+        assertTrue(route.cumulative[1] > 0.0)
+        assertTrue(route.cumulative[2] > route.cumulative[1])
+    }
 }

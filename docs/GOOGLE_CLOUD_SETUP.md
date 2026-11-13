@@ -81,3 +81,4 @@ Google Navigation SDK requires user acceptance of terms on first launch:
 - The navigation service runs as a foreground service (`GoogleNavigationService`) with type `location`.
 - It broadcasts live turn-by-turn guidance notifications so directions remain active even if the app is momentarily backgrounded.
 - For maximum GPS stability on Realme / ColorOS devices, set the app battery usage in device Settings to **Unrestricted**.
+
