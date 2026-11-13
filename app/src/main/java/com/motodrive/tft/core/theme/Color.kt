@@ -35,22 +35,6 @@ val MSportLightBlue = Color(0xFF36B9FF)
 val MSportDarkBlue = Color(0xFF00458C)
 val MSportRed = Color(0xFFE2231A)
 
-// TVS RONIN SIGNATURE PALETTE (AMOLED Pure Black, Racing Red, Laser Red)
-val RoninPureBlack = Color(0xFF030305)
-val RoninDeepObsidian = Color(0xFF0A0A0F)
-val RoninPanelBackground = Color(0xFF140D0E)
-val RoninCardBackground = Color(0xFF1A1012)
-val RoninCardElevated = Color(0xFF241618)
-
-val RoninNeonRed = Color(0xFFFF2A3A)
-val RoninElectricRed = Color(0xFFFF5252)
-val RoninDeepRed = Color(0xFFB91C1C)
-val RoninRacingRed = Color(0xFFEF4444)
-val RoninBrightRed = Color(0xFFFF3B30)
-val RoninBorderRed = Color(0xFF3D1619)
-val RoninGlowRed = Color(0x66FF2A3A)
-val RoninSilverText = Color(0xFFF1F5F9)
-
 // DAYLIGHT / LIGHT COCKPIT PALETTE (High-Visibility Crisp Motorcycle Day Mode)
 val LightCockpitBackground = Color(0xFFF1F5F9)
 val LightCockpitPanel = Color(0xFFFFFFFF)
@@ -66,12 +50,4 @@ val LightMutedText = Color(0xFF94A3B8)
 val LightPrimaryAccent = Color(0xFF2563EB)
 val LightElectricAccent = Color(0xFF0284C7)
 val LightWarningRed = Color(0xFFDC2626)
-
-// Backward-compatibility aliases for red theme transition
-val RoninNeonPurple = RoninNeonRed
-val RoninElectricViolet = RoninElectricRed
-val RoninDeepPurple = RoninDeepRed
-val RoninBorderPurple = RoninBorderRed
-val RoninGlowPurple = RoninGlowRed
-val RoninLavenderText = RoninSilverText
 

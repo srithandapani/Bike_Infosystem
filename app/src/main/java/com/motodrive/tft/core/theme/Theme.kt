@@ -38,25 +38,7 @@ val CockpitLightColors = CockpitColors(
     isLight = true
 )
 
-val RoninRedColors = CockpitColors(
-    background = RoninPureBlack,
-    panel = RoninPanelBackground,
-    card = RoninCardBackground,
-    cardElevated = RoninCardElevated,
-    primaryAccent = RoninNeonRed,
-    electricAccent = RoninElectricRed,
-    warningRed = RoninRacingRed,
-    border = RoninBorderRed,
-    borderGlow = RoninGlowRed,
-    primaryText = PrimaryText,
-    secondaryText = RoninSilverText,
-    isLight = false
-)
-
-// Alias for seamless backward compatibility
-val RoninPurpleColors = RoninRedColors
-
-val MSportBlueColors = CockpitColors(
+val CockpitDarkColors = CockpitColors(
     background = PrimaryBackground,
     panel = PanelBackground,
     card = CardBackground,
@@ -70,6 +52,8 @@ val MSportBlueColors = CockpitColors(
     secondaryText = SecondaryText,
     isLight = false
 )
+
+val MSportBlueColors = CockpitDarkColors
 
 val LocalCockpitColors = staticCompositionLocalOf { CockpitLightColors }
 
@@ -111,8 +95,7 @@ fun MotoDriveTheme(
     content: @Composable () -> Unit
 ) {
     val activeColors = when (themeStyle) {
-        "TVS_RONIN_RED" -> RoninRedColors
-        "M_SPORT_BLUE" -> MSportBlueColors
+        "DARK_THEME", "M_SPORT_BLUE" -> CockpitDarkColors
         else -> CockpitLightColors
     }
     val colorScheme = if (activeColors.isLight) getLightColorScheme(activeColors) else getDarkColorScheme(activeColors)

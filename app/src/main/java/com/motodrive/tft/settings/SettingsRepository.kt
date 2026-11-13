@@ -17,7 +17,7 @@ data class AppSettings(
     val bluetoothAutoLaunch: Boolean = true,
     val highFrequencyGps: Boolean = true,
     val clusterStyle: String = "DIGITAL", // "DIGITAL", "ANALOG", "HYBRID"
-    val themeStyle: String = "LIGHT_THEME", // "LIGHT_THEME", "TVS_RONIN_RED", "M_SPORT_BLUE"
+    val themeStyle: String = "LIGHT_THEME", // "LIGHT_THEME", "DARK_THEME"
     val iphoneNotificationsEnabled: Boolean = true,
     val showNotificationPreviews: Boolean = true,
     val notifyIncomingCalls: Boolean = true,
@@ -68,7 +68,7 @@ class SettingsRepository(private val context: Context) {
             bluetoothAutoLaunch = prefs[Keys.BT_AUTO_LAUNCH] ?: true,
             highFrequencyGps = prefs[Keys.HIGH_FREQ_GPS] ?: true,
             clusterStyle = prefs[Keys.CLUSTER_STYLE] ?: "DIGITAL",
-            themeStyle = prefs[Keys.THEME_STYLE] ?: "LIGHT_THEME",
+            themeStyle = prefs[Keys.THEME_STYLE]?.let { if (it == "TVS_RONIN_RED" || it == "TVS_RONIN_PURPLE") "LIGHT_THEME" else it } ?: "LIGHT_THEME",
             iphoneNotificationsEnabled = prefs[Keys.IPHONE_NOTIFS_ENABLED] ?: true,
             showNotificationPreviews = prefs[Keys.SHOW_NOTIF_PREVIEWS] ?: true,
             notifyIncomingCalls = prefs[Keys.NOTIFY_CALLS] ?: true,
