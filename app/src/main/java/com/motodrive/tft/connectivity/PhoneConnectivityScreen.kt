@@ -30,12 +30,13 @@ fun PhoneConnectivityScreen(
     onQuickCall: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
     var dialNumber by remember { mutableStateOf("") }
 
     Row(
         modifier = modifier
             .fillMaxSize()
-            .background(PrimaryBackground)
+            .background(colors.background)
             .padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp)
     ) {
@@ -48,7 +49,7 @@ fun PhoneConnectivityScreen(
         ) {
             Text(
                 text = "BLUETOOTH AUDIO & HELMETS",
-                style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue)
+                style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent)
             )
 
             LazyColumn(
@@ -58,8 +59,8 @@ fun PhoneConnectivityScreen(
                 items(uiState.pairedDevices) { dev ->
                     GlowCard(
                         modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = if (dev.isConnected) CardBackgroundElevated else CardBackground,
-                        borderColor = if (dev.isConnected) ElectricBlue else ThinBorderColor
+                        backgroundColor = if (dev.isConnected) colors.cardElevated else colors.card,
+                        borderColor = if (dev.isConnected) colors.primaryAccent else colors.border
                     ) {
                         Row(
                             modifier = Modifier
@@ -76,13 +77,13 @@ fun PhoneConnectivityScreen(
                                     modifier = Modifier
                                         .size(36.dp)
                                         .clip(CircleShape)
-                                        .background(if (dev.isConnected) DarkBlueAccent else SecondaryBackground),
+                                        .background(if (dev.isConnected) colors.primaryAccent.copy(alpha = 0.15f) else colors.cardElevated),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Icon(
                                         imageVector = if (dev.isHelmet) Icons.Default.HeadsetMic else Icons.Default.Bluetooth,
                                         contentDescription = null,
-                                        tint = if (dev.isConnected) ElectricBlue else SecondaryText,
+                                        tint = if (dev.isConnected) colors.primaryAccent else colors.secondaryText,
                                         modifier = Modifier.size(20.dp)
                                     )
                                 }
@@ -91,12 +92,12 @@ fun PhoneConnectivityScreen(
                                     Text(
                                         text = dev.name,
                                         style = MotoDriveTypography.titleLarge.copy(fontSize = 14.sp),
-                                        color = PrimaryText
+                                        color = colors.primaryText
                                     )
                                     Text(
                                         text = if (dev.isConnected) "Connected Audio" else "Available",
                                         style = MotoDriveTypography.bodyMedium,
-                                        color = if (dev.isConnected) SuccessGreen else SecondaryText
+                                        color = if (dev.isConnected) SuccessGreen else colors.secondaryText
                                     )
                                 }
                             }
@@ -105,7 +106,7 @@ fun PhoneConnectivityScreen(
                                 modifier = Modifier
                                     .size(10.dp)
                                     .clip(CircleShape)
-                                    .background(if (dev.isConnected) SuccessGreen else GaugeTickColor)
+                                    .background(if (dev.isConnected) SuccessGreen else if (colors.isLight) colors.border else GaugeTickColor)
                             )
                         }
                     }
@@ -122,7 +123,7 @@ fun PhoneConnectivityScreen(
         ) {
             Text(
                 text = "HANDS-FREE SPEED DIAL",
-                style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue)
+                style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent)
             )
 
             // Speed Dial Preset Cards
@@ -140,8 +141,8 @@ fun PhoneConnectivityScreen(
                             .weight(1f)
                             .clip(RoundedCornerShape(10.dp))
                             .clickable { onQuickCall(contact.second) },
-                        backgroundColor = CardBackgroundElevated,
-                        borderColor = ThinBorderColor
+                        backgroundColor = colors.card,
+                        borderColor = colors.border
                     ) {
                         Column(
                             modifier = Modifier.padding(10.dp),
@@ -159,13 +160,13 @@ fun PhoneConnectivityScreen(
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 12.sp
                                 ),
-                                color = PrimaryText,
+                                color = colors.primaryText,
                                 maxLines = 1
                             )
                             Text(
                                 text = contact.second,
                                 style = MotoDriveTypography.labelSmall,
-                                color = SecondaryText
+                                color = colors.secondaryText
                             )
                         }
                     }
@@ -175,8 +176,8 @@ fun PhoneConnectivityScreen(
             // Number Display & Quick Dial
             GlowCard(
                 modifier = Modifier.fillMaxWidth(),
-                backgroundColor = CardBackground,
-                borderColor = ElectricBlue
+                backgroundColor = colors.card,
+                borderColor = colors.primaryAccent
             ) {
                 Row(
                     modifier = Modifier
@@ -191,13 +192,13 @@ fun PhoneConnectivityScreen(
                             fontWeight = FontWeight.Bold,
                             letterSpacing = 1.sp
                         ),
-                        color = if (dialNumber.isNotEmpty()) PrimaryText else SecondaryText
+                        color = if (dialNumber.isNotEmpty()) colors.primaryText else colors.secondaryText
                     )
 
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         if (dialNumber.isNotEmpty()) {
                             IconButton(onClick = { dialNumber = dialNumber.dropLast(1) }) {
-                                Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Backspace", tint = SecondaryText)
+                                Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Backspace", tint = colors.secondaryText)
                             }
                         }
 
@@ -208,9 +209,9 @@ fun PhoneConnectivityScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
                             shape = RoundedCornerShape(8.dp)
                         ) {
-                            Icon(Icons.Default.Call, contentDescription = "Call", tint = PrimaryText)
+                            Icon(Icons.Default.Call, contentDescription = "Call", tint = Color.White)
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("CALL", fontWeight = FontWeight.Bold)
+                            Text("CALL", fontWeight = FontWeight.Bold, color = Color.White)
                         }
                     }
                 }
@@ -239,15 +240,15 @@ fun PhoneConnectivityScreen(
                                     .weight(1f)
                                     .height(38.dp)
                                     .clip(RoundedCornerShape(8.dp))
-                                    .background(PanelBackground)
-                                    .border(1.dp, ThinBorderColor, RoundedCornerShape(8.dp))
+                                    .background(colors.card)
+                                    .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                                     .clickable { dialNumber += digit },
                                 contentAlignment = Alignment.Center
                             ) {
                                 Text(
                                     text = digit,
                                     style = MotoDriveTypography.titleLarge.copy(fontWeight = FontWeight.Bold),
-                                    color = PrimaryText
+                                    color = colors.primaryText
                                 )
                             }
                         }

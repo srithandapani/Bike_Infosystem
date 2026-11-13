@@ -326,8 +326,8 @@ fun NavigationMapView(
                 Surface(
                     onClick = { onSaveLocationAs("home") },
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.6f),
-                    border = borderStroke(ThinBorderColor),
+                    color = colors.cardElevated.copy(alpha = 0.95f),
+                    border = borderStroke(colors.border),
                     modifier = Modifier.height(36.dp)
                 ) {
                     Row(
@@ -336,15 +336,15 @@ fun NavigationMapView(
                     ) {
                         Icon(Icons.Default.AddLocation, contentDescription = null, tint = Color(0xFF34D399), modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Set as Home", style = MotoDriveTypography.labelSmall, color = SecondaryText)
+                        Text("Set as Home", style = MotoDriveTypography.labelSmall, color = colors.secondaryText)
                     }
                 }
 
                 Surface(
                     onClick = { onSaveLocationAs("work") },
                     shape = RoundedCornerShape(20.dp),
-                    color = Color.Black.copy(alpha = 0.6f),
-                    border = borderStroke(ThinBorderColor),
+                    color = colors.cardElevated.copy(alpha = 0.95f),
+                    border = borderStroke(colors.border),
                     modifier = Modifier.height(36.dp)
                 ) {
                     Row(
@@ -353,7 +353,7 @@ fun NavigationMapView(
                     ) {
                         Icon(Icons.Default.AddLocation, contentDescription = null, tint = Color(0xFFA78BFA), modifier = Modifier.size(14.dp))
                         Spacer(modifier = Modifier.width(4.dp))
-                        Text("Set as Work", style = MotoDriveTypography.labelSmall, color = SecondaryText)
+                        Text("Set as Work", style = MotoDriveTypography.labelSmall, color = colors.secondaryText)
                     }
                 }
             }

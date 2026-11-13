@@ -43,7 +43,7 @@ class SettingsRepository(private val context: Context) {
         val BT_AUTO_LAUNCH = booleanPreferencesKey("bt_auto_launch")
         val HIGH_FREQ_GPS = booleanPreferencesKey("high_freq_gps")
         val CLUSTER_STYLE = stringPreferencesKey("cluster_style")
-        val THEME_STYLE = stringPreferencesKey("theme_style_v5")
+        val THEME_STYLE = stringPreferencesKey("theme_style_v6")
         val IPHONE_NOTIFS_ENABLED = booleanPreferencesKey("iphone_notifs_enabled")
         val SHOW_NOTIF_PREVIEWS = booleanPreferencesKey("show_notif_previews")
         val NOTIFY_CALLS = booleanPreferencesKey("notify_calls")

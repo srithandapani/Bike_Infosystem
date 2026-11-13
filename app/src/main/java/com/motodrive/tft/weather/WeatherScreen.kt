@@ -25,10 +25,12 @@ fun WeatherScreen(
     onRefresh: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
+
     Row(
         modifier = modifier
             .fillMaxSize()
-            .background(PrimaryBackground)
+            .background(colors.background)
             .padding(20.dp),
         horizontalArrangement = Arrangement.spacedBy(20.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -38,8 +40,8 @@ fun WeatherScreen(
             modifier = Modifier
                 .weight(0.48f)
                 .fillMaxHeight(),
-            backgroundColor = CardBackgroundElevated,
-            borderColor = ElectricBlue
+            backgroundColor = colors.card,
+            borderColor = colors.primaryAccent
         ) {
             Column(
                 modifier = Modifier
@@ -55,10 +57,10 @@ fun WeatherScreen(
                 ) {
                     Text(
                         text = "LIVE WEATHER RADAR",
-                        style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue)
+                        style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent)
                     )
                     IconButton(onClick = onRefresh, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = ElectricBlue)
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = colors.primaryAccent)
                     }
                 }
 
@@ -66,14 +68,14 @@ fun WeatherScreen(
                     modifier = Modifier
                         .size(110.dp)
                         .clip(CircleShape)
-                        .background(DarkBlueAccent)
-                        .border(2.dp, ElectricBlue, CircleShape),
+                        .background(if (colors.isLight) colors.primaryAccent.copy(alpha = 0.12f) else DarkBlueAccent)
+                        .border(2.dp, colors.primaryAccent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (uiState.precipitationMm > 0f) Icons.Default.WaterDrop else Icons.Default.WbSunny,
                         contentDescription = null,
-                        tint = if (uiState.precipitationMm > 0f) ElectricBlue else WarningOrange,
+                        tint = if (uiState.precipitationMm > 0f) colors.primaryAccent else WarningOrange,
                         modifier = Modifier.size(64.dp)
                     )
                 }
@@ -85,19 +87,19 @@ fun WeatherScreen(
                             fontSize = 64.sp,
                             fontWeight = FontWeight.ExtraBold
                         ),
-                        color = PrimaryText
+                        color = colors.primaryText
                     )
                     Text(
                         text = uiState.conditionDescription,
                         style = MotoDriveTypography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = ElectricBlue
+                        color = colors.primaryAccent
                     )
                 }
 
                 Text(
                     text = uiState.errorMessage ?: "Road Surface: Dry & Optimal Grip",
                     style = MotoDriveTypography.labelSmall.copy(
-                        color = if (uiState.precipitationMm > 0f) AlertRed else SuccessGreen,
+                        color = if (uiState.precipitationMm > 0f) colors.warningRed else SuccessGreen,
                         fontWeight = FontWeight.Bold
                     )
                 )
@@ -113,7 +115,7 @@ fun WeatherScreen(
         ) {
             Text(
                 text = "RIDING ENVIRONMENT",
-                style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue)
+                style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent)
             )
 
             Row(
@@ -123,19 +125,19 @@ fun WeatherScreen(
                 // Wind Speed
                 GlowCard(
                     modifier = Modifier.weight(1f),
-                    backgroundColor = CardBackground,
-                    borderColor = ThinBorderColor
+                    backgroundColor = colors.card,
+                    borderColor = colors.border
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Icons.Default.Air, contentDescription = null, tint = ElectricBlue)
-                        Text("WIND SPEED", style = MotoDriveTypography.labelSmall, color = SecondaryText)
+                        Icon(Icons.Default.Air, contentDescription = null, tint = colors.primaryAccent)
+                        Text("WIND SPEED", style = MotoDriveTypography.labelSmall, color = colors.secondaryText)
                         Text(
                             "${uiState.windSpeedKmH} km/h",
                             style = MotoDriveTypography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = PrimaryText
+                            color = colors.primaryText
                         )
                     }
                 }
@@ -143,19 +145,19 @@ fun WeatherScreen(
                 // Humidity
                 GlowCard(
                     modifier = Modifier.weight(1f),
-                    backgroundColor = CardBackground,
-                    borderColor = ThinBorderColor
+                    backgroundColor = colors.card,
+                    borderColor = colors.border
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Icon(Icons.Default.WaterDrop, contentDescription = null, tint = ElectricBlue)
-                        Text("HUMIDITY", style = MotoDriveTypography.labelSmall, color = SecondaryText)
+                        Icon(Icons.Default.WaterDrop, contentDescription = null, tint = colors.primaryAccent)
+                        Text("HUMIDITY", style = MotoDriveTypography.labelSmall, color = colors.secondaryText)
                         Text(
                             "${uiState.humidityPercent}%",
                             style = MotoDriveTypography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = PrimaryText
+                            color = colors.primaryText
                         )
                     }
                 }
@@ -168,19 +170,19 @@ fun WeatherScreen(
                 // Rain / Precipitation
                 GlowCard(
                     modifier = Modifier.weight(1f),
-                    backgroundColor = CardBackground,
-                    borderColor = ThinBorderColor
+                    backgroundColor = colors.card,
+                    borderColor = colors.border
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(Icons.Default.CloudQueue, contentDescription = null, tint = WarningOrange)
-                        Text("PRECIPITATION", style = MotoDriveTypography.labelSmall, color = SecondaryText)
+                        Text("PRECIPITATION", style = MotoDriveTypography.labelSmall, color = colors.secondaryText)
                         Text(
                             "${uiState.precipitationMm} mm/h",
                             style = MotoDriveTypography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (uiState.precipitationMm > 0f) WarningOrange else PrimaryText
+                            color = if (uiState.precipitationMm > 0f) WarningOrange else colors.primaryText
                         )
                     }
                 }
@@ -188,19 +190,19 @@ fun WeatherScreen(
                 // Visor / Riding Advisory
                 GlowCard(
                     modifier = Modifier.weight(1f),
-                    backgroundColor = CardBackground,
-                    borderColor = ThinBorderColor
+                    backgroundColor = colors.card,
+                    borderColor = colors.border
                 ) {
                     Column(
                         modifier = Modifier.padding(14.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Icon(Icons.Default.Shield, contentDescription = null, tint = SuccessGreen)
-                        Text("RIDE SAFETY", style = MotoDriveTypography.labelSmall, color = SecondaryText)
+                        Text("RIDE SAFETY", style = MotoDriveTypography.labelSmall, color = colors.secondaryText)
                         Text(
                             if (uiState.precipitationMm > 2f) "Wet Visor" else "Optimal Visor",
                             style = MotoDriveTypography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                            color = if (uiState.precipitationMm > 2f) AlertRed else SuccessGreen
+                            color = if (uiState.precipitationMm > 2f) colors.warningRed else SuccessGreen
                         )
                     }
                 }

@@ -150,7 +150,7 @@ fun IphoneNotificationCenterScreen(
                     Text(
                         text = cat,
                         style = MotoDriveTypography.labelSmall.copy(fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium),
-                        color = if (isSelected) colors.primaryText else colors.secondaryText
+                        color = if (isSelected) Color.White else colors.secondaryText
                     )
                 }
             }

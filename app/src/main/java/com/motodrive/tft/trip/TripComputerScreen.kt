@@ -30,10 +30,12 @@ fun TripComputerScreen(
     onResetTrip: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
+
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(PrimaryBackground)
+            .background(colors.background)
             .padding(20.dp),
         verticalArrangement = Arrangement.SpaceBetween
     ) {
@@ -50,13 +52,13 @@ fun TripComputerScreen(
                 Icon(
                     imageVector = Icons.Default.Speed,
                     contentDescription = null,
-                    tint = ElectricBlue,
+                    tint = colors.primaryAccent,
                     modifier = Modifier.size(24.dp)
                 )
                 Text(
                     text = "TRIP COMPUTER 1",
                     style = MotoDriveTypography.headlineSmall.copy(fontWeight = FontWeight.Bold),
-                    color = PrimaryText
+                    color = colors.primaryText
                 )
             }
 
@@ -65,26 +67,26 @@ fun TripComputerScreen(
                 onClick = onResetTrip,
                 enabled = !isRidingMode,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = DarkBlueAccent,
-                    disabledContainerColor = CardBackground
+                    containerColor = if (colors.isLight) colors.cardElevated else DarkBlueAccent,
+                    disabledContainerColor = if (colors.isLight) colors.cardElevated.copy(alpha = 0.5f) else CardBackground
                 ),
                 shape = RoundedCornerShape(8.dp),
                 border = androidx.compose.foundation.BorderStroke(
                     1.dp,
-                    if (!isRidingMode) ElectricBlue else ThinBorderColor
+                    if (!isRidingMode) colors.primaryAccent else colors.border
                 )
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
                     contentDescription = "Reset Trip",
-                    tint = if (!isRidingMode) ElectricBlue else SecondaryText,
+                    tint = if (!isRidingMode) colors.primaryAccent else colors.secondaryText,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
                     text = if (!isRidingMode) "RESET TRIP" else "LOCKED (RIDING)",
                     style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = if (!isRidingMode) PrimaryText else SecondaryText
+                    color = if (!isRidingMode) colors.primaryText else colors.secondaryText
                 )
             }
         }
@@ -102,8 +104,8 @@ fun TripComputerScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                backgroundColor = CardBackgroundElevated,
-                borderColor = ElectricBlue
+                backgroundColor = colors.card,
+                borderColor = colors.primaryAccent
             ) {
                 Column(
                     modifier = Modifier
@@ -113,7 +115,7 @@ fun TripComputerScreen(
                 ) {
                     Text(
                         text = "TRIP DISTANCE",
-                        style = MotoDriveTypography.labelSmall.copy(color = ElectricBlue, letterSpacing = 1.sp)
+                        style = MotoDriveTypography.labelSmall.copy(color = colors.primaryAccent, letterSpacing = 1.sp)
                     )
                     Text(
                         text = String.format("%.1f", Units.distance(speedUiState.tripDistanceKm, speedUiState.speedUnit)),
@@ -121,12 +123,12 @@ fun TripComputerScreen(
                             fontSize = 54.sp,
                             fontWeight = FontWeight.ExtraBold
                         ),
-                        color = PrimaryText
+                        color = colors.primaryText
                     )
                     Text(
                         text = Units.distanceLabelLong(speedUiState.speedUnit),
                         style = MotoDriveTypography.labelSmall,
-                        color = SecondaryText
+                        color = colors.secondaryText
                     )
                 }
             }
@@ -136,8 +138,8 @@ fun TripComputerScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                backgroundColor = CardBackground,
-                borderColor = ThinBorderColor
+                backgroundColor = colors.card,
+                borderColor = colors.border
             ) {
                 Column(
                     modifier = Modifier
@@ -147,7 +149,7 @@ fun TripComputerScreen(
                 ) {
                     Text(
                         text = "RIDE TIME",
-                        style = MotoDriveTypography.labelSmall.copy(color = ElectricBlue, letterSpacing = 1.sp)
+                        style = MotoDriveTypography.labelSmall.copy(color = colors.primaryAccent, letterSpacing = 1.sp)
                     )
                     val h = speedUiState.rideDurationSeconds / 3600
                     val m = (speedUiState.rideDurationSeconds % 3600) / 60
@@ -158,12 +160,12 @@ fun TripComputerScreen(
                             fontSize = 38.sp,
                             fontWeight = FontWeight.Bold
                         ),
-                        color = ElectricBlue
+                        color = colors.primaryAccent
                     )
                     Text(
                         text = "ACTIVE DURATION",
                         style = MotoDriveTypography.labelSmall,
-                        color = SecondaryText
+                        color = colors.secondaryText
                     )
                 }
             }
@@ -173,8 +175,8 @@ fun TripComputerScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                backgroundColor = CardBackground,
-                borderColor = ThinBorderColor
+                backgroundColor = colors.card,
+                borderColor = colors.border
             ) {
                 Column(
                     modifier = Modifier
@@ -184,7 +186,7 @@ fun TripComputerScreen(
                 ) {
                     Text(
                         text = "AVG GPS SPEED",
-                        style = MotoDriveTypography.labelSmall.copy(color = ElectricBlue, letterSpacing = 1.sp)
+                        style = MotoDriveTypography.labelSmall.copy(color = colors.primaryAccent, letterSpacing = 1.sp)
                     )
                     Text(
                         text = String.format("%.1f", Units.speed(speedUiState.averageSpeedKmH, speedUiState.speedUnit)),
@@ -192,12 +194,12 @@ fun TripComputerScreen(
                             fontSize = 54.sp,
                             fontWeight = FontWeight.ExtraBold
                         ),
-                        color = PrimaryText
+                        color = colors.primaryText
                     )
                     Text(
                         text = Units.speedLabel(speedUiState.speedUnit) + " AVERAGE",
                         style = MotoDriveTypography.labelSmall,
-                        color = SecondaryText
+                        color = colors.secondaryText
                     )
                 }
             }
@@ -207,8 +209,8 @@ fun TripComputerScreen(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight(),
-                backgroundColor = CardBackground,
-                borderColor = ThinBorderColor
+                backgroundColor = colors.card,
+                borderColor = colors.border
             ) {
                 Column(
                     modifier = Modifier
@@ -218,7 +220,7 @@ fun TripComputerScreen(
                 ) {
                     Text(
                         text = "MAX SPEED & HEADING",
-                        style = MotoDriveTypography.labelSmall.copy(color = ElectricBlue, letterSpacing = 1.sp)
+                        style = MotoDriveTypography.labelSmall.copy(color = colors.primaryAccent, letterSpacing = 1.sp)
                     )
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
@@ -230,12 +232,12 @@ fun TripComputerScreen(
                                 fontSize = 48.sp,
                                 fontWeight = FontWeight.Bold
                             ),
-                            color = PrimaryText
+                            color = colors.primaryText
                         )
                         Text(
                             text = Units.speedLabel(speedUiState.speedUnit) + " MAX",
                             style = MotoDriveTypography.labelSmall,
-                            color = AlertRed
+                            color = colors.warningRed
                         )
                     }
 
@@ -246,7 +248,7 @@ fun TripComputerScreen(
                         Icon(
                             imageVector = Icons.Default.Navigation,
                             contentDescription = null,
-                            tint = ElectricBlue,
+                            tint = colors.primaryAccent,
                             modifier = Modifier
                                 .size(18.dp)
                                 .rotate(speedUiState.headingDegrees)
@@ -254,7 +256,7 @@ fun TripComputerScreen(
                         Text(
                             text = "${speedUiState.headingCardinal} ${speedUiState.headingDegrees.toInt()}° COMPASS",
                             style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                            color = ElectricBlue
+                            color = colors.primaryAccent
                         )
                     }
                 }
@@ -266,8 +268,8 @@ fun TripComputerScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(8.dp))
-                .background(PanelBackground)
-                .border(0.5.dp, ThinBorderColor, RoundedCornerShape(8.dp))
+                .background(colors.card)
+                .border(0.5.dp, colors.border, RoundedCornerShape(8.dp))
                 .padding(horizontal = 14.dp, vertical = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.Center
@@ -275,7 +277,7 @@ fun TripComputerScreen(
             Icon(
                 imageVector = Icons.Default.Warning,
                 contentDescription = null,
-                tint = WarningOrange,
+                tint = if (colors.isLight) Color(0xFFD97706) else WarningOrange,
                 modifier = Modifier.size(14.dp)
             )
             Spacer(modifier = Modifier.width(6.dp))
@@ -283,7 +285,7 @@ fun TripComputerScreen(
                 text = "SUPPLEMENTARY GPS TRIP TELEMETRY - DOES NOT REPLACE MOTORCYCLE CERTIFIED GAUGES",
                 style = MotoDriveTypography.labelSmall.copy(
                     fontSize = 9.sp,
-                    color = SecondaryText,
+                    color = colors.secondaryText,
                     letterSpacing = 0.5.sp
                 )
             )

@@ -44,6 +44,7 @@ fun AppLauncherScreen(
     onOpenNavigation: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
     val context = LocalContext.current
 
     val apps = listOf(
@@ -59,7 +60,7 @@ fun AppLauncherScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(PrimaryBackground)
+            .background(colors.background)
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -70,12 +71,12 @@ fun AppLauncherScreen(
         ) {
             Text(
                 text = "APPLICATION LAUNCHER",
-                style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue)
+                style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent)
             )
             Text(
                 text = "PARKED MOTORCYCLE APPS",
                 style = MotoDriveTypography.labelSmall,
-                color = SecondaryText
+                color = colors.secondaryText
             )
         }
 
@@ -98,8 +99,8 @@ fun AppLauncherScreen(
                                 launchAppOrIntent(context, app)
                             }
                         },
-                    backgroundColor = CardBackgroundElevated,
-                    borderColor = ThinBorderColor
+                    backgroundColor = colors.card,
+                    borderColor = colors.border
                 ) {
                     Column(
                         modifier = Modifier
@@ -112,14 +113,14 @@ fun AppLauncherScreen(
                             modifier = Modifier
                                 .size(42.dp)
                                 .clip(CircleShape)
-                                .background(DarkBlueAccent)
-                                .border(1.dp, ElectricBlue, CircleShape),
+                                .background(if (colors.isLight) colors.primaryAccent.copy(alpha = 0.12f) else DarkBlueAccent)
+                                .border(1.dp, colors.primaryAccent, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             Icon(
                                 imageVector = app.icon,
                                 contentDescription = app.title,
-                                tint = ElectricBlue,
+                                tint = colors.primaryAccent,
                                 modifier = Modifier.size(24.dp)
                             )
                         }
@@ -132,14 +133,14 @@ fun AppLauncherScreen(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 13.sp
                             ),
-                            color = PrimaryText,
+                            color = colors.primaryText,
                             maxLines = 1
                         )
 
                         Text(
                             text = app.category,
                             style = MotoDriveTypography.labelSmall.copy(fontSize = 10.sp),
-                            color = SecondaryText,
+                            color = colors.secondaryText,
                             maxLines = 1
                         )
                     }

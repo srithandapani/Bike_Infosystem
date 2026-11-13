@@ -145,6 +145,7 @@ fun FullScreenMediaScreen(
     onLaunchMusicApp: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
     val progressRatio = if (uiState.durationMs > 0) {
         (uiState.currentPositionMs.toFloat() / uiState.durationMs.toFloat()).coerceIn(0f, 1f)
     } else 0f
@@ -152,7 +153,7 @@ fun FullScreenMediaScreen(
     Row(
         modifier = modifier
             .fillMaxSize()
-            .background(PrimaryBackground)
+            .background(colors.background)
             .padding(24.dp),
         horizontalArrangement = Arrangement.spacedBy(24.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -164,11 +165,17 @@ fun FullScreenMediaScreen(
                 .fillMaxHeight()
                 .clip(RoundedCornerShape(20.dp))
                 .background(
-                    Brush.verticalGradient(
-                        listOf(DarkBlueAccent, CardBackground)
-                    )
+                    if (colors.isLight) {
+                        Brush.verticalGradient(
+                            listOf(colors.cardElevated, colors.card)
+                        )
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(DarkBlueAccent, CardBackground)
+                        )
+                    }
                 )
-                .border(1.5.dp, ElectricBlue, RoundedCornerShape(20.dp)),
+                .border(1.5.dp, colors.electricAccent, RoundedCornerShape(20.dp)),
             contentAlignment = Alignment.Center
         ) {
             Column(
@@ -179,14 +186,14 @@ fun FullScreenMediaScreen(
                     modifier = Modifier
                         .size(140.dp)
                         .clip(CircleShape)
-                        .background(SecondaryBackground)
-                        .border(3.dp, ElectricBlue, CircleShape),
+                        .background(if (colors.isLight) colors.card else SecondaryBackground)
+                        .border(3.dp, colors.primaryAccent, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Album,
                         contentDescription = "Album Art",
-                        tint = ElectricBlue,
+                        tint = colors.primaryAccent,
                         modifier = Modifier.size(80.dp)
                     )
                 }
@@ -195,7 +202,7 @@ fun FullScreenMediaScreen(
                     text = uiState.sourceApp,
                     style = MotoDriveTypography.labelSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        color = ElectricBlue
+                        color = colors.primaryAccent
                     )
                 )
             }
@@ -214,19 +221,19 @@ fun FullScreenMediaScreen(
                     text = "NOW PLAYING",
                     style = MotoDriveTypography.labelSmall.copy(
                         letterSpacing = 1.5.sp,
-                        color = ElectricBlue
+                        color = colors.primaryAccent
                     )
                 )
                 Text(
                     text = uiState.title,
                     style = MotoDriveTypography.displaySmall.copy(fontWeight = FontWeight.Bold),
-                    color = PrimaryText,
+                    color = colors.primaryText,
                     maxLines = 1
                 )
                 Text(
                     text = uiState.artist,
                     style = MotoDriveTypography.headlineMedium.copy(fontWeight = FontWeight.Medium),
-                    color = SecondaryText,
+                    color = colors.secondaryText,
                     maxLines = 1
                 )
             }
@@ -240,9 +247,9 @@ fun FullScreenMediaScreen(
                         onSeekTo(targetMs)
                     },
                     colors = SliderDefaults.colors(
-                        thumbColor = ElectricBlue,
-                        activeTrackColor = ElectricBlue,
-                        inactiveTrackColor = GaugeTrackColor
+                        thumbColor = colors.primaryAccent,
+                        activeTrackColor = colors.primaryAccent,
+                        inactiveTrackColor = if (colors.isLight) colors.border else GaugeTrackColor
                     ),
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -254,12 +261,12 @@ fun FullScreenMediaScreen(
                     Text(
                         text = formatMillis(uiState.currentPositionMs),
                         style = MotoDriveTypography.labelSmall,
-                        color = SecondaryText
+                        color = colors.secondaryText
                     )
                     Text(
                         text = formatMillis(uiState.durationMs),
                         style = MotoDriveTypography.labelSmall,
-                        color = SecondaryText
+                        color = colors.secondaryText
                     )
                 }
             }
@@ -277,7 +284,7 @@ fun FullScreenMediaScreen(
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
                         contentDescription = "Previous",
-                        tint = PrimaryText,
+                        tint = colors.primaryText,
                         modifier = Modifier.size(38.dp)
                     )
                 }
@@ -288,15 +295,15 @@ fun FullScreenMediaScreen(
                     modifier = Modifier
                         .size(68.dp)
                         .clip(CircleShape)
-                        .background(PrimaryBlue)
-                        .border(2.dp, ElectricBlue, CircleShape)
+                        .background(colors.primaryAccent)
+                        .border(2.dp, colors.electricAccent, CircleShape)
                         .clickable { onTogglePlayPause() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (uiState.isPlaying) "Pause" else "Play",
-                        tint = PrimaryText,
+                        tint = Color.White,
                         modifier = Modifier.size(38.dp)
                     )
                 }
@@ -310,7 +317,7 @@ fun FullScreenMediaScreen(
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
-                        tint = PrimaryText,
+                        tint = colors.primaryText,
                         modifier = Modifier.size(38.dp)
                     )
                 }
@@ -323,22 +330,22 @@ fun FullScreenMediaScreen(
             ) {
                 Button(
                     onClick = { onLaunchMusicApp("com.spotify.music") },
-                    colors = ButtonDefaults.buttonColors(containerColor = CardBackground),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.card),
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ThinBorderColor),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("SPOTIFY", color = PrimaryText, style = MotoDriveTypography.labelSmall)
+                    Text("SPOTIFY", color = colors.primaryText, style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold))
                 }
 
                 Button(
                     onClick = { onLaunchMusicApp("com.google.android.apps.youtube.music") },
-                    colors = ButtonDefaults.buttonColors(containerColor = CardBackground),
+                    colors = ButtonDefaults.buttonColors(containerColor = colors.card),
                     shape = RoundedCornerShape(8.dp),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, ThinBorderColor),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, colors.border),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("YT MUSIC", color = PrimaryText, style = MotoDriveTypography.labelSmall)
+                    Text("YT MUSIC", color = colors.primaryText, style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.Bold))
                 }
             }
         }

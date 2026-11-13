@@ -60,7 +60,7 @@ fun RidingModeScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .align(Alignment.TopCenter)
-                .background(Color(0xCC050508))
+                .background(if (colors.isLight) colors.card.copy(alpha = 0.94f) else Color(0xCC050508))
                 .padding(horizontal = 16.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -189,7 +189,7 @@ fun RidingModeScreen(
                     Icon(
                         imageVector = if (mediaUiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = null,
-                        tint = colors.primaryText,
+                        tint = Color.White,
                         modifier = Modifier.size(20.dp)
                     )
                 }
