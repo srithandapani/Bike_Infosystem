@@ -55,10 +55,10 @@ Engineered for riders using an iPhone as their primary pocket phone while using 
 | ![Alerts](screenshots/tvs_ronin_alerts.png) | ![Settings](screenshots/tvs_ronin_settings.png) |
 
 ### 4. TVS Ronin Signature Design System
-- **Pure AMOLED Black**: `#030305` background for battery efficiency and maximum glare resistance.
-- **Ronin Racing Red & Laser Red**: Signature `#FF2A3A` accents with `#EF4444` alerts.
+- **Daylight Light Theme**: Ultra-high contrast daylight visibility with `#F1F5F9` cockpit background, crisp white panels, and automotive cobalt accents.
+- **TVS Ronin Racing Red & Laser Red**: Signature dark mode with `#030305` pure black and `#FF2A3A` accents.
 - **Silver Leaping Horse Emblem**: TVS official brand identity integrated into the top cockpit status bar.
-- **Theme Selection**: Switch between **TVS Ronin Racing Red** and **M Sport Blue** in Settings.
+- **Theme Selection**: Switch between **Daylight Light**, **TVS Ronin Racing Red**, and **M Sport Blue** in Settings.
 
 ---
 

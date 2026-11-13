@@ -31,13 +31,15 @@ fun MediaPlayerCompactCard(
     onOpenFullScreen: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val colors = LocalCockpitColors.current
+
     GlowCard(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .clickable { onOpenFullScreen() },
-        backgroundColor = PanelBackground,
-        borderColor = ThinBorderColor
+        backgroundColor = colors.card,
+        borderColor = colors.border
     ) {
         Row(
             modifier = Modifier
@@ -51,18 +53,14 @@ fun MediaPlayerCompactCard(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(8.dp))
-                    .background(
-                        Brush.linearGradient(
-                            listOf(DarkBlueAccent, ElectricBlue.copy(alpha = 0.4f))
-                        )
-                    )
-                    .border(1.dp, ElectricBlue, RoundedCornerShape(8.dp)),
+                    .background(colors.primaryAccent.copy(alpha = 0.15f))
+                    .border(1.dp, colors.primaryAccent, RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = Icons.Default.MusicNote,
                     contentDescription = null,
-                    tint = ElectricBlue,
+                    tint = colors.primaryAccent,
                     modifier = Modifier.size(24.dp)
                 )
             }
@@ -77,13 +75,13 @@ fun MediaPlayerCompactCard(
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Bold
                     ),
-                    color = PrimaryText,
+                    color = colors.primaryText,
                     maxLines = 1
                 )
                 Text(
                     text = uiState.artist,
                     style = MotoDriveTypography.bodyMedium,
-                    color = SecondaryText,
+                    color = colors.secondaryText,
                     maxLines = 1
                 )
             }
@@ -100,7 +98,7 @@ fun MediaPlayerCompactCard(
                     Icon(
                         imageVector = Icons.Default.SkipPrevious,
                         contentDescription = "Previous",
-                        tint = PrimaryText,
+                        tint = colors.primaryText,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -109,14 +107,14 @@ fun MediaPlayerCompactCard(
                     modifier = Modifier
                         .size(38.dp)
                         .clip(CircleShape)
-                        .background(PrimaryBlue)
+                        .background(colors.primaryAccent)
                         .clickable { onTogglePlayPause() },
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = if (uiState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                         contentDescription = if (uiState.isPlaying) "Pause" else "Play",
-                        tint = PrimaryText,
+                        tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
                 }
@@ -128,7 +126,7 @@ fun MediaPlayerCompactCard(
                     Icon(
                         imageVector = Icons.Default.SkipNext,
                         contentDescription = "Next",
-                        tint = PrimaryText,
+                        tint = colors.primaryText,
                         modifier = Modifier.size(22.dp)
                     )
                 }

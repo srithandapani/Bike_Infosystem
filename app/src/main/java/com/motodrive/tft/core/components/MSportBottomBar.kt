@@ -176,7 +176,7 @@ fun MSportBottomBar(
             Icon(
                 imageVector = Icons.Default.Mic,
                 contentDescription = "Voice Assistant",
-                tint = colors.primaryText,
+                tint = Color.White,
                 modifier = Modifier.size(20.dp)
             )
         }

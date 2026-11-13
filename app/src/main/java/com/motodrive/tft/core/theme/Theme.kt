@@ -2,6 +2,7 @@ package com.motodrive.tft.core.theme
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -18,7 +19,23 @@ data class CockpitColors(
     val border: Color,
     val borderGlow: Color,
     val primaryText: Color,
-    val secondaryText: Color
+    val secondaryText: Color,
+    val isLight: Boolean = false
+)
+
+val CockpitLightColors = CockpitColors(
+    background = LightCockpitBackground,
+    panel = LightCockpitPanel,
+    card = LightCockpitCard,
+    cardElevated = LightCockpitCardElevated,
+    primaryAccent = LightPrimaryAccent,
+    electricAccent = LightElectricAccent,
+    warningRed = LightWarningRed,
+    border = LightCockpitBorder,
+    borderGlow = LightCockpitBorderGlow,
+    primaryText = LightPrimaryText,
+    secondaryText = LightSecondaryText,
+    isLight = true
 )
 
 val RoninRedColors = CockpitColors(
@@ -32,7 +49,8 @@ val RoninRedColors = CockpitColors(
     border = RoninBorderRed,
     borderGlow = RoninGlowRed,
     primaryText = PrimaryText,
-    secondaryText = RoninSilverText
+    secondaryText = RoninSilverText,
+    isLight = false
 )
 
 // Alias for seamless backward compatibility
@@ -49,10 +67,27 @@ val MSportBlueColors = CockpitColors(
     border = ThinBorderColor,
     borderGlow = ThinBorderGlow,
     primaryText = PrimaryText,
-    secondaryText = SecondaryText
+    secondaryText = SecondaryText,
+    isLight = false
 )
 
-val LocalCockpitColors = staticCompositionLocalOf { RoninRedColors }
+val LocalCockpitColors = staticCompositionLocalOf { CockpitLightColors }
+
+private fun getLightColorScheme(colors: CockpitColors) = lightColorScheme(
+    primary = colors.primaryAccent,
+    secondary = colors.electricAccent,
+    tertiary = colors.warningRed,
+    background = colors.background,
+    surface = colors.panel,
+    surfaceVariant = colors.card,
+    onPrimary = Color.White,
+    onSecondary = Color.White,
+    onTertiary = Color.White,
+    onBackground = colors.primaryText,
+    onSurface = colors.primaryText,
+    onSurfaceVariant = colors.secondaryText,
+    error = colors.warningRed
+)
 
 private fun getDarkColorScheme(colors: CockpitColors) = darkColorScheme(
     primary = colors.primaryAccent,
@@ -72,14 +107,15 @@ private fun getDarkColorScheme(colors: CockpitColors) = darkColorScheme(
 
 @Composable
 fun MotoDriveTheme(
-    themeStyle: String = "TVS_RONIN_RED",
+    themeStyle: String = "LIGHT_THEME",
     content: @Composable () -> Unit
 ) {
     val activeColors = when (themeStyle) {
+        "TVS_RONIN_RED" -> RoninRedColors
         "M_SPORT_BLUE" -> MSportBlueColors
-        else -> RoninRedColors
+        else -> CockpitLightColors
     }
-    val colorScheme = getDarkColorScheme(activeColors)
+    val colorScheme = if (activeColors.isLight) getLightColorScheme(activeColors) else getDarkColorScheme(activeColors)
 
     CompositionLocalProvider(LocalCockpitColors provides activeColors) {
         MaterialTheme(

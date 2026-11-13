@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -60,6 +61,7 @@ fun NavigationMapView(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val colors = LocalCockpitColors.current
     var mapViewRef by remember { mutableStateOf<MapView?>(null) }
     var userMarkerRef by remember { mutableStateOf<Marker?>(null) }
     var destMarkerRef by remember { mutableStateOf<Marker?>(null) }
@@ -121,9 +123,9 @@ fun NavigationMapView(
         destMarkerRef = null
 
         if (uiState.isNavigating && uiState.routePoints.isNotEmpty()) {
-            // Draw glowing TVS Ronin Racing Red in-app route polyline
+            // Draw in-app route polyline matching cockpit theme
             val polyline = Polyline(map).apply {
-                outlinePaint.color = android.graphics.Color.parseColor("#FF2A3A")
+                outlinePaint.color = colors.primaryAccent.toArgb()
                 outlinePaint.strokeWidth = 14f
                 outlinePaint.strokeCap = Paint.Cap.ROUND
                 outlinePaint.strokeJoin = Paint.Join.ROUND
@@ -159,10 +161,10 @@ fun NavigationMapView(
         modifier = modifier
             .fillMaxSize()
             .clip(RoundedCornerShape(16.dp))
-            .background(Color.Black)
-            .border(1.dp, ThinBorderColor, RoundedCornerShape(16.dp))
+            .background(colors.background)
+            .border(1.dp, colors.border, RoundedCornerShape(16.dp))
     ) {
-        // Embedded High-Performance In-App Map Canvas (AMOLED Dark Tiles, Zero External Redirects)
+        // Embedded High-Performance In-App Map Canvas (Adaptive Daylight / AMOLED Dark Tiles)
         AndroidView(
             factory = { ctx ->
                 MapView(ctx).apply {
@@ -173,18 +175,21 @@ fun NavigationMapView(
                     maxZoomLevel = 20.0
                     controller.setZoom(16.0)
 
-                    // Pure AMOLED Monochrome Dark High-Contrast Filter (No purple tint, high readability)
-                    val matrix = ColorMatrix().apply {
-                        setSaturation(0f)
-                        val invert = ColorMatrix(floatArrayOf(
-                            -0.82f, 0f, 0f, 0f, 225f,
-                            0f, -0.82f, 0f, 0f, 225f,
-                            0f, 0f, -0.82f, 0f, 225f,
-                            0f, 0f, 0f, 1f, 0f
-                        ))
-                        postConcat(invert)
+                    if (!colors.isLight) {
+                        val matrix = ColorMatrix().apply {
+                            setSaturation(0f)
+                            val invert = ColorMatrix(floatArrayOf(
+                                -0.82f, 0f, 0f, 0f, 225f,
+                                0f, -0.82f, 0f, 0f, 225f,
+                                0f, 0f, -0.82f, 0f, 225f,
+                                0f, 0f, 0f, 1f, 0f
+                            ))
+                            postConcat(invert)
+                        }
+                        overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(matrix))
+                    } else {
+                        overlayManager.tilesOverlay.setColorFilter(null)
                     }
-                    overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(matrix))
 
                     val startLoc = currentLocation
                     val startGeo = if (startLoc != null) {
@@ -197,7 +202,23 @@ fun NavigationMapView(
                     mapViewRef = this
                 }
             },
-            update = { /* Updates handled reactively via LaunchedEffects */ },
+            update = { map ->
+                if (colors.isLight) {
+                    map.overlayManager.tilesOverlay.setColorFilter(null)
+                } else {
+                    val matrix = ColorMatrix().apply {
+                        setSaturation(0f)
+                        val invert = ColorMatrix(floatArrayOf(
+                            -0.82f, 0f, 0f, 0f, 225f,
+                            0f, -0.82f, 0f, 0f, 225f,
+                            0f, 0f, -0.82f, 0f, 225f,
+                            0f, 0f, 0f, 1f, 0f
+                        ))
+                        postConcat(invert)
+                    }
+                    map.overlayManager.tilesOverlay.setColorFilter(ColorMatrixColorFilter(matrix))
+                }
+            },
             modifier = Modifier.fillMaxSize()
         )
 
@@ -222,8 +243,8 @@ fun NavigationMapView(
                 Surface(
                     onClick = { isSearchExpanded = true },
                     shape = RoundedCornerShape(20.dp),
-                    color = CardBackgroundElevated.copy(alpha = 0.92f),
-                    border = borderStroke(ElectricBlue),
+                    color = colors.cardElevated.copy(alpha = 0.95f),
+                    border = borderStroke(colors.electricAccent),
                     modifier = Modifier.height(36.dp)
                 ) {
                     Row(
@@ -233,14 +254,14 @@ fun NavigationMapView(
                         Icon(
                             imageVector = Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = ElectricBlue,
+                            tint = colors.electricAccent,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(6.dp))
                         Text(
                             text = "Search Destination",
                             style = MotoDriveTypography.labelMedium,
-                            color = PrimaryText
+                            color = colors.primaryText
                         )
                     }
                 }
@@ -249,15 +270,15 @@ fun NavigationMapView(
                 Surface(
                     onClick = onVoiceClick,
                     shape = CircleShape,
-                    color = RoninNeonRed.copy(alpha = 0.25f),
-                    border = borderStroke(RoninNeonRed),
+                    color = colors.primaryAccent.copy(alpha = 0.2f),
+                    border = borderStroke(colors.primaryAccent),
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Icon(
                             imageVector = Icons.Default.Mic,
                             contentDescription = "Voice",
-                            tint = RoninNeonRed,
+                            tint = colors.primaryAccent,
                             modifier = Modifier.size(18.dp)
                         )
                     }
@@ -274,10 +295,10 @@ fun NavigationMapView(
                     }
                     val iconColor = when (dest.iconType) {
                         "GAS" -> Color(0xFFF59E0B)
-                        "WRENCH" -> Color(0xFF38BDF8)
-                        "HOME" -> Color(0xFF34D399)
-                        "WORK" -> Color(0xFFF87171)
-                        else -> RoninNeonRed
+                        "WRENCH" -> Color(0xFF0284C7)
+                        "HOME" -> Color(0xFF16A34A)
+                        "WORK" -> colors.primaryAccent
+                        else -> colors.primaryAccent
                     }
 
                     Surface(
@@ -286,8 +307,8 @@ fun NavigationMapView(
                             onStartNavigation(dest.query)
                         },
                         shape = RoundedCornerShape(20.dp),
-                        color = CardBackgroundElevated.copy(alpha = 0.92f),
-                        border = borderStroke(ThinBorderColor),
+                        color = colors.cardElevated.copy(alpha = 0.95f),
+                        border = borderStroke(colors.border),
                         modifier = Modifier.height(36.dp)
                     ) {
                         Row(
@@ -296,7 +317,7 @@ fun NavigationMapView(
                         ) {
                             Icon(icon, contentDescription = null, tint = iconColor, modifier = Modifier.size(15.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(dest.title, style = MotoDriveTypography.labelSmall, color = PrimaryText)
+                            Text(dest.title, style = MotoDriveTypography.labelSmall, color = colors.primaryText)
                         }
                     }
                 }
@@ -351,17 +372,17 @@ fun NavigationMapView(
                 Surface(
                     onClick = onCancelNavigation,
                     shape = RoundedCornerShape(12.dp),
-                    color = AlertRed.copy(alpha = 0.2f),
-                    border = borderStroke(AlertRed),
+                    color = colors.warningRed.copy(alpha = 0.2f),
+                    border = borderStroke(colors.warningRed),
                     modifier = Modifier.height(38.dp)
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Close, contentDescription = null, tint = AlertRed, modifier = Modifier.size(16.dp))
+                        Icon(Icons.Default.Close, contentDescription = null, tint = colors.warningRed, modifier = Modifier.size(16.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("END NAV", style = MotoDriveTypography.labelMedium, color = PrimaryText, fontWeight = FontWeight.Bold)
+                        Text("END NAV", style = MotoDriveTypography.labelMedium, color = colors.primaryText, fontWeight = FontWeight.Bold)
                     }
                 }
 
@@ -375,17 +396,17 @@ fun NavigationMapView(
                             }
                         },
                         shape = RoundedCornerShape(12.dp),
-                        color = CardBackgroundElevated.copy(alpha = 0.9f),
-                        border = borderStroke(RoninNeonRed),
+                        color = colors.cardElevated.copy(alpha = 0.95f),
+                        border = borderStroke(colors.primaryAccent),
                         modifier = Modifier.height(38.dp)
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 12.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = RoninNeonRed, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.MyLocation, contentDescription = null, tint = colors.primaryAccent, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("RE-CENTER", style = MotoDriveTypography.labelMedium, color = PrimaryText)
+                            Text("RE-CENTER", style = MotoDriveTypography.labelMedium, color = colors.primaryText)
                         }
                     }
                 }
@@ -397,7 +418,7 @@ fun NavigationMapView(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(PrimaryBackground.copy(alpha = 0.88f))
+                    .background(colors.background.copy(alpha = 0.92f))
                     .clickable { isSearchExpanded = false },
                 contentAlignment = Alignment.TopCenter
             ) {
@@ -406,8 +427,8 @@ fun NavigationMapView(
                         .fillMaxWidth(0.85f)
                         .padding(top = 16.dp),
                     shape = RoundedCornerShape(14.dp),
-                    backgroundColor = CardBackgroundElevated,
-                    borderColor = RoninNeonRed
+                    backgroundColor = colors.cardElevated,
+                    borderColor = colors.border
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
@@ -420,10 +441,10 @@ fun NavigationMapView(
                         ) {
                             Text(
                                 text = "SEARCH DESTINATION",
-                                style = MotoDriveTypography.labelLarge.copy(color = RoninNeonRed, fontWeight = FontWeight.Bold)
+                                style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent, fontWeight = FontWeight.Bold)
                             )
                             IconButton(onClick = { isSearchExpanded = false }, modifier = Modifier.size(28.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = SecondaryText)
+                                Icon(Icons.Default.Close, contentDescription = "Close", tint = colors.secondaryText)
                             }
                         }
 
@@ -433,15 +454,15 @@ fun NavigationMapView(
                                 searchInput = it
                                 onSearchQueryChange(it)
                             },
-                            placeholder = { Text("Search places, petrol pumps, addresses in India...", color = SecondaryText, fontSize = 13.sp) },
+                            placeholder = { Text("Search places, petrol pumps, addresses in India...", color = colors.secondaryText, fontSize = 13.sp) },
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth(),
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = PrimaryText,
-                                unfocusedTextColor = PrimaryText,
-                                focusedBorderColor = RoninNeonRed,
-                                unfocusedBorderColor = ThinBorderColor,
-                                cursorColor = RoninNeonRed
+                                focusedTextColor = colors.primaryText,
+                                unfocusedTextColor = colors.primaryText,
+                                focusedBorderColor = colors.primaryAccent,
+                                unfocusedBorderColor = colors.border,
+                                cursorColor = colors.primaryAccent
                             )
                         )
 
@@ -464,16 +485,16 @@ fun NavigationMapView(
                                             .padding(vertical = 8.dp, horizontal = 4.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(Icons.Default.Place, contentDescription = null, tint = RoninNeonRed, modifier = Modifier.size(16.dp))
+                                        Icon(Icons.Default.Place, contentDescription = null, tint = colors.primaryAccent, modifier = Modifier.size(16.dp))
                                         Spacer(modifier = Modifier.width(8.dp))
                                         Column {
-                                            Text(result.primaryText, style = MotoDriveTypography.bodyMedium, color = PrimaryText, fontWeight = FontWeight.SemiBold)
+                                            Text(result.primaryText, style = MotoDriveTypography.bodyMedium, color = colors.primaryText, fontWeight = FontWeight.SemiBold)
                                             if (result.secondaryText.isNotBlank()) {
-                                                Text(result.secondaryText, style = MotoDriveTypography.bodySmall, color = SecondaryText, maxLines = 1)
+                                                Text(result.secondaryText, style = MotoDriveTypography.bodySmall, color = colors.secondaryText, maxLines = 1)
                                             }
                                         }
                                     }
-                                    HorizontalDivider(color = ThinBorderColor)
+                                    HorizontalDivider(color = colors.border)
                                 }
                             }
                         }
@@ -484,7 +505,7 @@ fun NavigationMapView(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             TextButton(onClick = { isSearchExpanded = false }) {
-                                Text("CANCEL", color = SecondaryText)
+                                Text("CANCEL", color = colors.secondaryText)
                             }
                             Spacer(modifier = Modifier.width(8.dp))
                             Button(
@@ -495,12 +516,12 @@ fun NavigationMapView(
                                         isSearchExpanded = false
                                     }
                                 },
-                                colors = ButtonDefaults.buttonColors(containerColor = RoninNeonRed),
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.primaryAccent),
                                 shape = RoundedCornerShape(8.dp)
                             ) {
-                                Icon(Icons.Default.Navigation, contentDescription = null, tint = PrimaryText, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Navigation, contentDescription = null, tint = Color.White, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(6.dp))
-                                Text("START NAVIGATION", color = PrimaryText, fontWeight = FontWeight.Bold)
+                                Text("START NAVIGATION", color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                     }

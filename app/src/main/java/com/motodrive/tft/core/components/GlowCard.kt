@@ -13,31 +13,31 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.motodrive.tft.core.theme.CardBackground
-import com.motodrive.tft.core.theme.PanelBackground
-import com.motodrive.tft.core.theme.ThinBorderColor
+import com.motodrive.tft.core.theme.LocalCockpitColors
 
 @Composable
 fun GlowCard(
     modifier: Modifier = Modifier,
     shape: Shape = RoundedCornerShape(12.dp),
-    backgroundColor: Color = CardBackground,
-    borderColor: Color = ThinBorderColor,
+    backgroundColor: Color = Color.Unspecified,
+    borderColor: Color = Color.Unspecified,
     borderWidth: Dp = 1.dp,
     content: @Composable BoxScope.() -> Unit
 ) {
+    val colors = LocalCockpitColors.current
+    val topBg = if (backgroundColor != Color.Unspecified) backgroundColor else colors.card
+    val bottomBg = if (colors.isLight) colors.cardElevated else colors.panel
+    val borderCol = if (borderColor != Color.Unspecified) borderColor else colors.border
+
     Box(
         modifier = modifier
             .clip(shape)
             .background(
                 Brush.verticalGradient(
-                    colors = listOf(
-                        backgroundColor,
-                        PanelBackground
-                    )
+                    colors = listOf(topBg, bottomBg)
                 )
             )
-            .border(borderWidth, borderColor, shape),
+            .border(borderWidth, borderCol, shape),
         content = content
     )
 }

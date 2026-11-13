@@ -254,7 +254,7 @@ private fun DigitalGaugeCanvas(
 
             // Background Arc Track
             drawArc(
-                color = colors.card,
+                color = if (colors.isLight) colors.border.copy(alpha = 0.7f) else colors.card,
                 startAngle = startAngle,
                 sweepAngle = totalSweepAngle,
                 useCenter = false,
@@ -373,7 +373,7 @@ private fun AnalogGaugeCanvas(
 
             // Outer dial border ring
             drawCircle(
-                color = colors.card,
+                color = if (colors.isLight) colors.border.copy(alpha = 0.7f) else colors.card,
                 radius = radius,
                 center = center,
                 style = Stroke(width = 3.dp.toPx())
@@ -497,7 +497,7 @@ private fun HybridGaugeCanvas(
 
             // Background Track
             drawArc(
-                color = colors.card,
+                color = if (colors.isLight) colors.border.copy(alpha = 0.7f) else colors.card,
                 startAngle = startAngle,
                 sweepAngle = totalSweepAngle,
                 useCenter = false,

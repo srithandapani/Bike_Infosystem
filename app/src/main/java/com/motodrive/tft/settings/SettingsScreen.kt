@@ -101,7 +101,7 @@ fun SettingsScreen(
                 }
             }
 
-            // Dashboard Theme Palette (TVS Ronin Racing Red vs M Sport Blue)
+            // Dashboard Theme Palette (Daylight Light vs TVS Ronin Red vs M Sport Blue)
             GlowCard(
                 modifier = Modifier.fillMaxWidth(),
                 backgroundColor = colors.card,
@@ -115,7 +115,7 @@ fun SettingsScreen(
                 ) {
                     Column {
                         Text("Cockpit Color Theme", style = MotoDriveTypography.titleLarge, color = colors.primaryText)
-                        Text("TVS Ronin signature vs M Sport", style = MotoDriveTypography.bodyMedium, color = colors.secondaryText)
+                        Text("High-visibility Daylight vs Dark themes", style = MotoDriveTypography.bodyMedium, color = colors.secondaryText)
                     }
 
                     Row(
@@ -123,12 +123,24 @@ fun SettingsScreen(
                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         FilterChip(
+                            selected = settings.themeStyle == "LIGHT_THEME" || (settings.themeStyle != "TVS_RONIN_RED" && settings.themeStyle != "M_SPORT_BLUE"),
+                            onClick = { onThemeStyleChange("LIGHT_THEME") },
+                            label = { Text("LIGHT THEME", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = LightPrimaryAccent,
+                                selectedLabelColor = Color.White,
+                                containerColor = colors.cardElevated,
+                                labelColor = colors.secondaryText
+                            ),
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilterChip(
                             selected = settings.themeStyle == "TVS_RONIN_RED" || settings.themeStyle == "TVS_RONIN_PURPLE",
                             onClick = { onThemeStyleChange("TVS_RONIN_RED") },
-                            label = { Text("TVS RONIN RACING RED", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
+                            label = { Text("RONIN RED", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = RoninNeonRed,
-                                selectedLabelColor = PrimaryText,
+                                selectedLabelColor = Color.White,
                                 containerColor = colors.cardElevated,
                                 labelColor = colors.secondaryText
                             ),
@@ -140,7 +152,7 @@ fun SettingsScreen(
                             label = { Text("M SPORT BLUE", fontSize = 10.sp, fontWeight = FontWeight.Bold) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = PrimaryBlue,
-                                selectedLabelColor = PrimaryText,
+                                selectedLabelColor = Color.White,
                                 containerColor = colors.cardElevated,
                                 labelColor = colors.secondaryText
                             ),

@@ -51,6 +51,22 @@ val RoninBorderRed = Color(0xFF3D1619)
 val RoninGlowRed = Color(0x66FF2A3A)
 val RoninSilverText = Color(0xFFF1F5F9)
 
+// DAYLIGHT / LIGHT COCKPIT PALETTE (High-Visibility Crisp Motorcycle Day Mode)
+val LightCockpitBackground = Color(0xFFF1F5F9)
+val LightCockpitPanel = Color(0xFFFFFFFF)
+val LightCockpitCard = Color(0xFFFFFFFF)
+val LightCockpitCardElevated = Color(0xFFF8FAFC)
+val LightCockpitBorder = Color(0xFFCBD5E1)
+val LightCockpitBorderGlow = Color(0x332563EB)
+
+val LightPrimaryText = Color(0xFF0F172A)
+val LightSecondaryText = Color(0xFF475569)
+val LightMutedText = Color(0xFF94A3B8)
+
+val LightPrimaryAccent = Color(0xFF2563EB)
+val LightElectricAccent = Color(0xFF0284C7)
+val LightWarningRed = Color(0xFFDC2626)
+
 // Backward-compatibility aliases for red theme transition
 val RoninNeonPurple = RoninNeonRed
 val RoninElectricViolet = RoninElectricRed
