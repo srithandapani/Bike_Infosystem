@@ -49,6 +49,7 @@ fun RidingModeScreen(
         NavigationMapView(
             currentLocation = currentLocation,
             currentSpeedKmH = speedUiState.currentSpeedKmH,
+            headingDegrees = speedUiState.headingDegrees,
             uiState = navUiState,
             onStartNavigation = onStartNavigation,
             onCancelNavigation = onCancelNavigation,

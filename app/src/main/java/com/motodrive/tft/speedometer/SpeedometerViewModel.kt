@@ -160,17 +160,19 @@ class SpeedometerViewModel(application: Application) :
                 }
             } catch (_: SecurityException) {}
 
-            // 2. High Accuracy Continuous Fused Location Updates
-            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L)
-                .setMinUpdateIntervalMillis(500L)
+            // 2. High Accuracy Continuous Fused Location Updates (Fast 2-5Hz sampling for precision motorcycle navigation)
+            val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 500L)
+                .setMinUpdateIntervalMillis(200L)
+                .setMaxUpdateDelayMillis(500L)
                 .setMinUpdateDistanceMeters(0f)
+                .setWaitForAccurateLocation(false)
                 .build()
             fusedLocationClient.requestLocationUpdates(locationRequest, fusedLocationCallback, Looper.getMainLooper())
 
             // 3. Native LocationManager updates for high precision GPS Doppler speed
             if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
                 locationManager.requestLocationUpdates(
-                    LocationManager.GPS_PROVIDER, 500L, 0f, this, Looper.getMainLooper()
+                    LocationManager.GPS_PROVIDER, 300L, 0f, this, Looper.getMainLooper()
                 )
             }
             if (locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
@@ -235,22 +237,28 @@ class SpeedometerViewModel(application: Application) :
 
         refreshDeclination(location)
 
-        // Always update device live location immediately for navigation & map display
-        _uiState.update { cur ->
-            cur.copy(
-                lastLocation = location,
-                hasGpsFix = true,
-                gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else cur.gpsAccuracyMeters
-            )
-        }
-
-        // Precision Speedometer & Odometer Filtering
-        // Only run speed/distance integration on high-confidence fixes (GPS or Doppler speed)
         val isGps = location.provider == LocationManager.GPS_PROVIDER
         val hasGoodAccuracy = location.hasAccuracy() && location.accuracy <= MAX_ACCURACY_M
         val fixElapsedMs = location.elapsedRealtimeNanos / 1_000_000L
         val isFresh = (nowElapsedMs - fixElapsedMs) <= MAX_FIX_AGE_MS
 
+        // High-Precision Navigation Filter: only update map location with accurate, fresh fixes
+        val shouldUpdateMapLocation = (hasGoodAccuracy && isFresh) ||
+                _uiState.value.lastLocation == null ||
+                (nowElapsedMs - lastGpsFixElapsedMs) > 4000L
+
+        if (shouldUpdateMapLocation) {
+            _uiState.update { cur ->
+                cur.copy(
+                    lastLocation = location,
+                    hasGpsFix = true,
+                    gpsAccuracyMeters = if (location.hasAccuracy()) location.accuracy else cur.gpsAccuracyMeters
+                )
+            }
+        }
+
+        // Precision Speedometer & Odometer Filtering
+        // Only run speed/distance integration on high-confidence fixes (GPS or Doppler speed)
         if ((isGps || location.hasSpeed()) && hasGoodAccuracy && isFresh) {
             val prev = previousFix
             val dtSec = if (prev != null) (location.elapsedRealtimeNanos - prev.elapsedRealtimeNanos) / 1e9f else 0f

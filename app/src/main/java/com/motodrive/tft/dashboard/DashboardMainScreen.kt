@@ -168,6 +168,7 @@ fun DashboardMainScreen(
                                 NavigationMapView(
                                     currentLocation = speedUiState.lastLocation,
                                     currentSpeedKmH = speedUiState.currentSpeedKmH,
+                                    headingDegrees = speedUiState.headingDegrees,
                                     uiState = navUiState,
                                     onStartNavigation = onStartNavigation,
                                     onStartPlaceNavigation = onStartPlaceNavigation,

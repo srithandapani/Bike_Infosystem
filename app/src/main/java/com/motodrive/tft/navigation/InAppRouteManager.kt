@@ -22,11 +22,13 @@ class ActiveRoute(
     val totalMeters: Double get() = cumulative.lastOrNull() ?: 0.0
 }
 
-/** Result of projecting a GPS fix onto the route. */
+/** Result of projecting a GPS fix onto the route, including map-matched coordinate and road bearing. */
 data class RouteProgress(
     val alongMeters: Double,
     val offRouteMeters: Double,
-    val segmentIndex: Int
+    val segmentIndex: Int,
+    val snappedPoint: GeoPoint = GeoPoint(0.0, 0.0),
+    val segmentBearing: Float = 0f
 )
 
 fun haversine(a: GeoPoint, b: GeoPoint): Double {
@@ -123,6 +125,7 @@ object InAppRouteManager {
         var best = Double.MAX_VALUE
         var bestIdx = lo
         var bestAlong = route.cumulative[lo]
+        var bestT = 0.0
 
         // Local equirectangular projection around p (accurate to cm at segment scale)
         val cosLat = cos(Math.toRadians(p.latitude))
@@ -141,8 +144,17 @@ object InAppRouteManager {
                 best = d
                 bestIdx = i
                 bestAlong = route.cumulative[i] + t * (route.cumulative[i + 1] - route.cumulative[i])
+                bestT = t
             }
         }
-        return RouteProgress(bestAlong, best, bestIdx)
+
+        val p1 = g[bestIdx]
+        val p2 = g[min(g.size - 1, bestIdx + 1)]
+        val snappedLat = p1.latitude + bestT * (p2.latitude - p1.latitude)
+        val snappedLon = p1.longitude + bestT * (p2.longitude - p1.longitude)
+        val snapped = GeoPoint(snappedLat, snappedLon)
+        val bearing = p1.bearingTo(p2).toFloat()
+
+        return RouteProgress(bestAlong, best, bestIdx, snapped, (bearing + 360f) % 360f)
     }
 }

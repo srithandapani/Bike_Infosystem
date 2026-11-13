@@ -43,8 +43,30 @@ import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
+import kotlin.math.*
 
 private fun borderStroke(color: Color) = BorderStroke(1.dp, color)
+
+/** Shortest-arc angular low-pass filter to prevent marker spinning and jitter. */
+private fun smoothHeading(current: Float, target: Float, alpha: Float = 0.35f): Float {
+    var diff = (target - current) % 360f
+    if (diff < -180f) diff += 360f
+    if (diff > 180f) diff -= 360f
+    return (current + diff * alpha + 360f) % 360f
+}
+
+/** Computes forward look-ahead camera position in direction of travel. */
+private fun computeLookAhead(origin: GeoPoint, bearingDeg: Float, distanceMeters: Double): GeoPoint {
+    if (distanceMeters <= 0.0) return origin
+    val r = 6371008.8
+    val distRatio = distanceMeters / r
+    val radBearing = Math.toRadians(bearingDeg.toDouble())
+    val lat1 = Math.toRadians(origin.latitude)
+    val lon1 = Math.toRadians(origin.longitude)
+    val lat2 = asin(sin(lat1) * cos(distRatio) + cos(lat1) * sin(distRatio) * cos(radBearing))
+    val lon2 = lon1 + atan2(sin(radBearing) * sin(distRatio) * cos(lat1), cos(distRatio) - sin(lat1) * sin(lat2))
+    return GeoPoint(Math.toDegrees(lat2), Math.toDegrees(lon2))
+}
 
 private fun createVehicleIcon(context: android.content.Context, primaryColor: Int): android.graphics.drawable.BitmapDrawable {
     val sizePx = (36 * context.resources.displayMetrics.density).toInt().coerceAtLeast(36)
@@ -82,6 +104,7 @@ private fun createVehicleIcon(context: android.content.Context, primaryColor: In
 fun NavigationMapView(
     currentLocation: Location?,
     currentSpeedKmH: Float = 0f,
+    headingDegrees: Float = 0f,
     uiState: NavigationUiState,
     onStartNavigation: (String) -> Unit,
     onStartPlaceNavigation: (PlaceSearchResult) -> Unit = {},
@@ -112,34 +135,47 @@ fun NavigationMapView(
         }
     }
 
-    // Update vehicle marker & camera tracking when location changes
-    LaunchedEffect(currentLocation, isFollowingRider) {
+    // Precision vehicle marker placement (map-matched when navigating) & automotive look-ahead tracking
+    LaunchedEffect(currentLocation, uiState.snappedLocation, uiState.navigationBearing, headingDegrees, isFollowingRider) {
         val map = mapViewRef ?: return@LaunchedEffect
-        if (currentLocation != null) {
-            val geoPoint = GeoPoint(currentLocation.latitude, currentLocation.longitude)
-            if (userMarkerRef == null) {
-                val marker = Marker(map).apply {
-                    position = geoPoint
-                    icon = createVehicleIcon(map.context, colors.primaryAccent.toArgb())
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    title = "TVS Ronin 225"
-                }
-                map.overlays.add(marker)
-                userMarkerRef = marker
-                map.controller.setZoom(16.5)
-                map.controller.setCenter(geoPoint)
-            } else {
-                userMarkerRef?.position = geoPoint
-                if (currentLocation.hasBearing()) {
-                    userMarkerRef?.rotation = currentLocation.bearing
-                }
-            }
+        val rawPoint = currentLocation?.let { GeoPoint(it.latitude, it.longitude) }
+        val targetPoint = if (uiState.isNavigating && uiState.snappedLocation != null) {
+            uiState.snappedLocation
+        } else {
+            rawPoint
+        } ?: return@LaunchedEffect
 
-            if (isFollowingRider && !uiState.isOverviewMode) {
-                map.controller.animateTo(geoPoint)
-            }
-            map.invalidate()
+        val targetHeading = when {
+            uiState.isNavigating && uiState.navigationBearing != null -> uiState.navigationBearing
+            currentSpeedKmH > 3.0f && currentLocation?.hasBearing() == true -> currentLocation.bearing
+            else -> headingDegrees
         }
+
+        if (userMarkerRef == null) {
+            val marker = Marker(map).apply {
+                position = targetPoint
+                rotation = targetHeading
+                icon = createVehicleIcon(map.context, colors.primaryAccent.toArgb())
+                setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
+                title = "TVS Ronin 225"
+            }
+            map.overlays.add(marker)
+            userMarkerRef = marker
+            map.controller.setZoom(16.5)
+            map.controller.setCenter(targetPoint)
+        } else {
+            userMarkerRef?.position = targetPoint
+            val currentRot = userMarkerRef?.rotation ?: targetHeading
+            userMarkerRef?.rotation = smoothHeading(currentRot, targetHeading, 0.40f)
+        }
+
+        if (isFollowingRider && !uiState.isOverviewMode) {
+            // Automotive look-ahead: bias camera forward in motion direction
+            val lookAheadMeters = if (currentSpeedKmH > 15f) (currentSpeedKmH * 0.4).coerceAtMost(35.0) else 0.0
+            val cameraTarget = computeLookAhead(targetPoint, targetHeading, lookAheadMeters)
+            map.controller.animateTo(cameraTarget)
+        }
+        map.invalidate()
     }
 
     // Update Route Polyline & Destination Marker on the embedded map

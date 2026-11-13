@@ -45,6 +45,8 @@ data class NavigationUiState(
     val destinationAddress: String = "",
     val destinationLatLng: LatLng? = null,
     val destinationPoint: GeoPoint? = null,
+    val snappedLocation: GeoPoint? = null,
+    val navigationBearing: Float? = null,
     val routePoints: List<GeoPoint> = emptyList(),
     val nextTurnDirection: TurnDirection = TurnDirection.STRAIGHT,
     val distanceToNextTurn: String = "--",
@@ -276,8 +278,13 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             val progress = InAppRouteManager.project(route, riderPoint, lastSegmentIndex)
             lastSegmentIndex = progress.segmentIndex
 
-            // 1. Off-Route detection (threshold: 80 metres)
-            if (progress.offRouteMeters > 80.0) {
+            // Precision Map Matching: Lock marker to road corridor if within 30 metres
+            val isCorridor = progress.offRouteMeters <= 30.0
+            val snappedLoc = if (isCorridor) progress.snappedPoint else null
+            val navBearing = if (isCorridor) progress.segmentBearing else null
+
+            // 1. Off-Route detection (refined threshold: 45 metres for prompt re-routing)
+            if (progress.offRouteMeters > 45.0) {
                 viewModelScope.launch {
                     val destPt = route.destinationPoint
                     val destTitle = route.destinationName
@@ -295,12 +302,14 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             val remainingMeters = (route.totalMeters - progress.alongMeters).coerceAtLeast(0.0)
             val remainingKm = (remainingMeters / 1000.0).toFloat()
 
-            // 3. Arrival detection (within 25m of destination)
-            if (remainingMeters < 25.0) {
+            // 3. Arrival detection (within 20m of destination)
+            if (remainingMeters < 20.0) {
                 _uiState.update {
                     it.copy(
                         isArrived = true,
                         isNavigating = false,
+                        snappedLocation = null,
+                        navigationBearing = null,
                         distanceToNextTurn = "0 m",
                         nextRoadName = "Destination Reached",
                         nextTurnDirection = TurnDirection.DESTINATION,
@@ -336,6 +345,8 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
 
             _uiState.update {
                 it.copy(
+                    snappedLocation = snappedLoc,
+                    navigationBearing = navBearing,
                     nextTurnDirection = turnDir,
                     distanceToNextTurn = formatTurnDistance(distanceToStepM),
                     nextRoadName = road,
@@ -579,6 +590,8 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                 destinationName = "",
                 destinationPoint = null,
                 destinationLatLng = null,
+                snappedLocation = null,
+                navigationBearing = null,
                 routePoints = emptyList(),
                 distanceToNextTurn = "--",
                 nextRoadName = "",
@@ -589,10 +602,10 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
     }
 
     private fun formatTurnDistance(meters: Float): String {
-        return if (meters >= 1000f) {
-            String.format(Locale.US, "%.1f km", meters / 1000f)
-        } else {
-            "${meters.roundToInt()} m"
+        return when {
+            meters <= 12f -> "NOW"
+            meters < 1000f -> "${meters.roundToInt()} m"
+            else -> String.format(Locale.US, "%.1f km", meters / 1000f)
         }
     }
 }
