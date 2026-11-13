@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -28,6 +29,9 @@ import com.motodrive.tft.core.theme.*
 fun PhoneConnectivityScreen(
     uiState: ConnectivityUiState,
     onQuickCall: (String) -> Unit,
+    onConnectDevice: (ConnectedBtDevice) -> Unit = {},
+    onStartDiscovery: () -> Unit = {},
+    onCancelDiscovery: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val colors = LocalCockpitColors.current
@@ -37,77 +41,291 @@ fun PhoneConnectivityScreen(
         modifier = modifier
             .fillMaxSize()
             .background(colors.background)
-            .padding(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Left Column: Bluetooth Paired Devices & Helmet Headsets
+        // Left Column: Bluetooth Status, Scan Controls, Paired & Discovered Devices
         Column(
             modifier = Modifier
-                .weight(0.48f)
+                .weight(0.50f)
                 .fillMaxHeight(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            Text(
-                text = "BLUETOOTH AUDIO & HELMETS",
-                style = MotoDriveTypography.labelLarge.copy(color = colors.primaryAccent)
-            )
+            // Bluetooth Status Banner & Discovery Trigger
+            GlowCard(
+                modifier = Modifier.fillMaxWidth(),
+                backgroundColor = colors.cardElevated,
+                borderColor = when (uiState.bluetoothStatus) {
+                    BluetoothConnectionStatus.CONNECTED -> SuccessGreen
+                    BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                    BluetoothConnectionStatus.DISCONNECTED,
+                    BluetoothConnectionStatus.BLUETOOTH_OFF -> AlertRed
+                    else -> colors.primaryAccent
+                }
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        val statusIcon = when (uiState.bluetoothStatus) {
+                            BluetoothConnectionStatus.BLUETOOTH_OFF -> Icons.Default.BluetoothDisabled
+                            BluetoothConnectionStatus.CONNECTED -> Icons.Default.BluetoothConnected
+                            BluetoothConnectionStatus.SEARCHING -> Icons.AutoMirrored.Filled.BluetoothSearching
+                            else -> Icons.Default.Bluetooth
+                        }
+                        val statusTint = when (uiState.bluetoothStatus) {
+                            BluetoothConnectionStatus.CONNECTED -> SuccessGreen
+                            BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                            BluetoothConnectionStatus.DISCONNECTED,
+                            BluetoothConnectionStatus.BLUETOOTH_OFF -> AlertRed
+                            else -> colors.primaryAccent
+                        }
 
+                        Icon(
+                            imageVector = statusIcon,
+                            contentDescription = null,
+                            tint = statusTint,
+                            modifier = Modifier.size(20.dp)
+                        )
+
+                        Column {
+                            Text(
+                                text = uiState.bluetoothStatus.label.uppercase(),
+                                style = MotoDriveTypography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 12.sp
+                                ),
+                                color = statusTint
+                            )
+                            if (uiState.isConnected) {
+                                Text(
+                                    text = uiState.connectedDeviceName,
+                                    style = MotoDriveTypography.labelSmall.copy(fontSize = 10.sp),
+                                    color = colors.primaryText,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+
+                    // Scan / Stop Button
+                    if (uiState.isBluetoothEnabled) {
+                        if (uiState.isSearching) {
+                            Button(
+                                onClick = onCancelDiscovery,
+                                colors = ButtonDefaults.buttonColors(containerColor = WarningOrange),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(12.dp),
+                                    strokeWidth = 2.dp,
+                                    color = Color.White
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    "STOP",
+                                    style = MotoDriveTypography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                )
+                            }
+                        } else {
+                            Button(
+                                onClick = onStartDiscovery,
+                                colors = ButtonDefaults.buttonColors(containerColor = colors.primaryAccent),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                shape = RoundedCornerShape(6.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Refresh,
+                                    contentDescription = "Scan",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    "SCAN",
+                                    style = MotoDriveTypography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = Color.White
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Scrollable Devices List: Paired Devices + Discovered Devices
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(uiState.pairedDevices) { dev ->
-                    GlowCard(
-                        modifier = Modifier.fillMaxWidth(),
-                        backgroundColor = if (dev.isConnected) colors.cardElevated else colors.card,
-                        borderColor = if (dev.isConnected) colors.primaryAccent else colors.border
-                    ) {
-                        Row(
+                // Section: Paired Devices
+                item {
+                    Text(
+                        text = "PAIRED DEVICES (${uiState.pairedDevices.size})",
+                        style = MotoDriveTypography.labelSmall.copy(
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = colors.secondaryText
+                        )
+                    )
+                }
+
+                if (uiState.pairedDevices.isEmpty()) {
+                    item {
+                        Box(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(colors.card)
+                                .border(1.dp, colors.border, RoundedCornerShape(8.dp))
                                 .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = if (uiState.isBluetoothEnabled) "No paired devices. Tap SCAN to search." else "Bluetooth is turned off.",
+                                style = MotoDriveTypography.bodySmall,
+                                color = colors.secondaryText
+                            )
+                        }
+                    }
+                } else {
+                    items(uiState.pairedDevices) { dev ->
+                        GlowCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onConnectDevice(dev) },
+                            backgroundColor = if (dev.isConnected) colors.cardElevated else colors.card,
+                            borderColor = if (dev.isConnected) SuccessGreen else colors.border
                         ) {
                             Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                horizontalArrangement = Arrangement.SpaceBetween
                             ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            .size(34.dp)
+                                            .clip(CircleShape)
+                                            .background(if (dev.isConnected) SuccessGreen.copy(alpha = 0.15f) else colors.cardElevated),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Icon(
+                                            imageVector = if (dev.isHelmet) Icons.Default.HeadsetMic else Icons.Default.Bluetooth,
+                                            contentDescription = null,
+                                            tint = if (dev.isConnected) SuccessGreen else colors.secondaryText,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    Column {
+                                        Text(
+                                            text = dev.name,
+                                            style = MotoDriveTypography.titleMedium.copy(fontSize = 13.sp),
+                                            color = colors.primaryText,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = if (dev.isConnected) "Connected Audio" else "Ready to Connect (Tap)",
+                                            style = MotoDriveTypography.labelSmall.copy(fontSize = 10.sp),
+                                            color = if (dev.isConnected) SuccessGreen else colors.secondaryText
+                                        )
+                                    }
+                                }
+
                                 Box(
                                     modifier = Modifier
-                                        .size(36.dp)
+                                        .size(10.dp)
                                         .clip(CircleShape)
-                                        .background(if (dev.isConnected) colors.primaryAccent.copy(alpha = 0.15f) else colors.cardElevated),
-                                    contentAlignment = Alignment.Center
+                                        .background(if (dev.isConnected) SuccessGreen else colors.border)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Section: Discovered Nearby Devices
+                if (uiState.discoveredDevices.isNotEmpty()) {
+                    item {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "NEARBY DISCOVERED DEVICES (${uiState.discoveredDevices.size})",
+                            style = MotoDriveTypography.labelSmall.copy(
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = colors.primaryAccent
+                            )
+                        )
+                    }
+
+                    items(uiState.discoveredDevices) { dev ->
+                        GlowCard(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onConnectDevice(dev) },
+                            backgroundColor = colors.card,
+                            borderColor = colors.primaryAccent.copy(alpha = 0.5f)
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp)
                                 ) {
                                     Icon(
                                         imageVector = if (dev.isHelmet) Icons.Default.HeadsetMic else Icons.Default.Bluetooth,
                                         contentDescription = null,
-                                        tint = if (dev.isConnected) colors.primaryAccent else colors.secondaryText,
-                                        modifier = Modifier.size(20.dp)
+                                        tint = colors.primaryAccent,
+                                        modifier = Modifier.size(18.dp)
                                     )
+                                    Column {
+                                        Text(
+                                            text = dev.name,
+                                            style = MotoDriveTypography.titleMedium.copy(fontSize = 12.sp),
+                                            color = colors.primaryText,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "Tap to Pair & Connect",
+                                            style = MotoDriveTypography.labelSmall.copy(fontSize = 9.sp),
+                                            color = colors.secondaryText
+                                        )
+                                    }
                                 }
 
-                                Column {
-                                    Text(
-                                        text = dev.name,
-                                        style = MotoDriveTypography.titleLarge.copy(fontSize = 14.sp),
-                                        color = colors.primaryText
+                                Text(
+                                    text = "PAIR",
+                                    style = MotoDriveTypography.labelSmall.copy(
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = colors.primaryAccent
                                     )
-                                    Text(
-                                        text = if (dev.isConnected) "Connected Audio" else "Available",
-                                        style = MotoDriveTypography.bodyMedium,
-                                        color = if (dev.isConnected) SuccessGreen else colors.secondaryText
-                                    )
-                                }
+                                )
                             }
-
-                            Box(
-                                modifier = Modifier
-                                    .size(10.dp)
-                                    .clip(CircleShape)
-                                    .background(if (dev.isConnected) SuccessGreen else if (colors.isLight) colors.border else GaugeTickColor)
-                            )
                         }
                     }
                 }

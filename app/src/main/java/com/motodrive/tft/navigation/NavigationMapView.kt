@@ -225,20 +225,21 @@ fun NavigationMapView(
 
                     val startLoc = currentLocation
                     var initialGeo: GeoPoint? = null
-                    if (startLoc != null) {
+                    if (startLoc != null && startLoc.latitude != 0.0 && startLoc.longitude != 0.0) {
                         initialGeo = GeoPoint(startLoc.latitude, startLoc.longitude)
                     } else {
                         try {
                             val lm = ctx.getSystemService(android.content.Context.LOCATION_SERVICE) as? android.location.LocationManager
                             val last = lm?.getLastKnownLocation(android.location.LocationManager.GPS_PROVIDER)
                                 ?: lm?.getLastKnownLocation(android.location.LocationManager.NETWORK_PROVIDER)
-                            if (last != null) {
+                            if (last != null && last.latitude != 0.0 && last.longitude != 0.0) {
                                 initialGeo = GeoPoint(last.latitude, last.longitude)
                             }
                         } catch (_: SecurityException) {}
                     }
-                    val startGeo = initialGeo ?: GeoPoint(12.9716, 77.5946)
-                    controller.setCenter(startGeo)
+                    if (initialGeo != null) {
+                        controller.setCenter(initialGeo)
+                    }
 
                     mapViewRef = this
                 }
@@ -607,6 +608,34 @@ fun NavigationMapView(
                             }
                         }
                     }
+                }
+            }
+        }
+
+        // Overlay when acquiring live GPS fix
+        if (currentLocation == null) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .clip(RoundedCornerShape(20.dp))
+                    .background(colors.card.copy(alpha = 0.92f))
+                    .border(1.dp, colors.border, RoundedCornerShape(20.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = colors.primaryAccent
+                    )
+                    Text(
+                        text = "Acquiring live GPS...",
+                        style = MotoDriveTypography.labelSmall.copy(fontWeight = FontWeight.SemiBold, fontSize = 11.sp),
+                        color = colors.primaryText
+                    )
                 }
             }
         }

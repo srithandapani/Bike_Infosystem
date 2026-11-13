@@ -1,11 +1,18 @@
 package com.motodrive.tft
 
 import android.Manifest
+import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothManager
+import android.content.Context
+import android.content.Intent
+import android.content.IntentSender
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.provider.Settings
 import android.view.WindowManager
 import androidx.activity.compose.setContent
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +30,11 @@ import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import com.google.android.gms.common.api.ResolvableApiException
+import com.google.android.gms.location.LocationRequest
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.LocationSettingsRequest
+import com.google.android.gms.location.Priority
 import kotlinx.coroutines.launch
 import com.motodrive.tft.connectivity.ConnectivityViewModel
 import com.motodrive.tft.connectivity.apple.AppleBleManager
@@ -51,6 +63,26 @@ class MainActivity : FragmentActivity() {
 
     private var isRidingMode by mutableStateOf(false)
 
+    // Google Play Services Location Resolution Launcher
+    private val locationSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            speedometerViewModel.startLocationUpdates()
+        }
+    }
+
+    // Official System Bluetooth Enable Request Launcher
+    private val enableBluetoothLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == RESULT_OK) {
+            connectivityViewModel.initializeBluetoothReadiness()
+        } else {
+            connectivityViewModel.refreshBluetoothState()
+        }
+    }
+
     // Automotive Permission Launcher
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -58,10 +90,17 @@ class MainActivity : FragmentActivity() {
         val fineLocationGranted = permissions[Manifest.permission.ACCESS_FINE_LOCATION] ?: false
         val coarseLocationGranted = permissions[Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
         if (fineLocationGranted || coarseLocationGranted) {
-            speedometerViewModel.startLocationUpdates()
+            checkLocationSettingsAndStart()
             navigationViewModel.initNavigator(this@MainActivity)
         }
-        connectivityViewModel.refreshBluetoothState()
+        val btConnectGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            permissions[Manifest.permission.BLUETOOTH_CONNECT] ?: false
+        } else true
+        if (btConnectGranted) {
+            checkAndPromptBluetooth()
+        } else {
+            connectivityViewModel.refreshBluetoothState()
+        }
         appleBleManager.connectToBondedIphone()
     }
 
@@ -88,12 +127,13 @@ class MainActivity : FragmentActivity() {
             handleVoiceCommand(command)
         }
 
-        // Bridge live GPS updates to In-App Navigation Engine
+        // Bridge live GPS updates to In-App Navigation Engine & Weather Service
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 speedometerViewModel.uiState.collect { state ->
                     state.lastLocation?.let { loc ->
                         navigationViewModel.updateCurrentLocation(loc)
+                        weatherViewModel.fetchWeatherForCoordinates(loc.latitude, loc.longitude)
                     }
                 }
             }
@@ -242,7 +282,10 @@ class MainActivity : FragmentActivity() {
                         onNotifyWhatsAppChange = { settingsViewModel.updateNotifyWhatsApp(it) },
                         onNotifyInstagramChange = { settingsViewModel.updateNotifyInstagram(it) },
                         onNotifySmsChange = { settingsViewModel.updateNotifySms(it) },
-                        onNotifySnapchatChange = { settingsViewModel.updateNotifySnapchat(it) }
+                        onNotifySnapchatChange = { settingsViewModel.updateNotifySnapchat(it) },
+                        onConnectBtDevice = { connectivityViewModel.connectToDevice(it) },
+                        onStartBtDiscovery = { connectivityViewModel.startDiscovery() },
+                        onCancelBtDiscovery = { connectivityViewModel.cancelDiscovery() }
                     )
                 }
             }
@@ -289,6 +332,55 @@ class MainActivity : FragmentActivity() {
             WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 
+    private fun checkLocationSettingsAndStart() {
+        val hasFine = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        val hasCoarse = ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!hasFine && !hasCoarse) return
+
+        val locationRequest = LocationRequest.Builder(Priority.PRIORITY_HIGH_ACCURACY, 1000L).build()
+        val builder = LocationSettingsRequest.Builder()
+            .addLocationRequest(locationRequest)
+            .setAlwaysShow(true)
+        val client = LocationServices.getSettingsClient(this)
+        client.checkLocationSettings(builder.build())
+            .addOnSuccessListener {
+                speedometerViewModel.startLocationUpdates()
+            }
+            .addOnFailureListener { exception ->
+                if (exception is ResolvableApiException) {
+                    try {
+                        val intentSenderRequest = IntentSenderRequest.Builder(exception.resolution).build()
+                        locationSettingsLauncher.launch(intentSenderRequest)
+                    } catch (sendEx: IntentSender.SendIntentException) {
+                        try {
+                            startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                        } catch (_: Exception) {}
+                    }
+                } else {
+                    try {
+                        startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    } catch (_: Exception) {}
+                }
+            }
+    }
+
+    private fun checkAndPromptBluetooth() {
+        val bluetoothManager = getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
+        val adapter = bluetoothManager?.adapter ?: BluetoothAdapter.getDefaultAdapter()
+        if (adapter != null) {
+            if (!adapter.isEnabled) {
+                try {
+                    val enableBtIntent = Intent(BluetoothAdapter.ACTION_REQUEST_ENABLE)
+                    enableBluetoothLauncher.launch(enableBtIntent)
+                } catch (e: SecurityException) {
+                    e.printStackTrace()
+                }
+            } else {
+                connectivityViewModel.initializeBluetoothReadiness()
+            }
+        }
+    }
+
     private fun checkAndRequestPermissions() {
         val permissionsToRequest = mutableListOf(
             Manifest.permission.ACCESS_FINE_LOCATION,
@@ -312,7 +404,8 @@ class MainActivity : FragmentActivity() {
         if (missing.isNotEmpty()) {
             permissionLauncher.launch(missing.toTypedArray())
         } else {
-            speedometerViewModel.startLocationUpdates()
+            checkLocationSettingsAndStart()
+            checkAndPromptBluetooth()
             connectivityViewModel.refreshBluetoothState()
             appleBleManager.connectToBondedIphone()
             navigationViewModel.initNavigator(this)
@@ -321,6 +414,8 @@ class MainActivity : FragmentActivity() {
 
     override fun onResume() {
         super.onResume()
+        checkLocationSettingsAndStart()
+        checkAndPromptBluetooth()
         connectivityViewModel.refreshBluetoothState()
         mediaViewModel.refreshNotificationAccess()
     }

@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.BluetoothSearching
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -17,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.motodrive.tft.connectivity.BluetoothConnectionStatus
 import com.motodrive.tft.connectivity.apple.IphoneBleConnectionState
 import com.motodrive.tft.core.theme.*
 import com.motodrive.tft.weather.WeatherUiState
@@ -37,6 +39,7 @@ fun StatusBar(
     isRidingMode: Boolean,
     isBluetoothEnabled: Boolean = true,
     isBluetoothConnected: Boolean = false,
+    bluetoothStatus: BluetoothConnectionStatus = BluetoothConnectionStatus.BLUETOOTH_OFF,
     connectedDeviceName: String? = null,
     modifier: Modifier = Modifier
 ) {
@@ -144,27 +147,36 @@ fun StatusBar(
             }
 
             // Bluetooth Connection Status (System Bluetooth / Helmet / Connected Phone / iPhone BLE)
-            val isBtOn = isBluetoothEnabled
-            val isBtConnected = iphoneBleState.isConnected || isBluetoothConnected
+            val isBtOn = isBluetoothEnabled && bluetoothStatus != BluetoothConnectionStatus.BLUETOOTH_OFF
+            val isBtConnected = iphoneBleState.isConnected || isBluetoothConnected || bluetoothStatus == BluetoothConnectionStatus.CONNECTED
             val btLabel = when {
                 !isBtOn -> "BT OFF"
                 iphoneBleState.isConnected -> "iPHONE"
                 isBluetoothConnected -> connectedDeviceName?.take(9)?.uppercase() ?: "CONNECTED"
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> "SEARCHING"
+                bluetoothStatus == BluetoothConnectionStatus.READY_TO_CONNECT -> "READY"
+                bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> "DISCONNECTED"
+                bluetoothStatus == BluetoothConnectionStatus.CONNECTED -> connectedDeviceName?.take(9)?.uppercase() ?: "CONNECTED"
                 else -> "BT ON"
             }
             val btIcon = when {
                 !isBtOn -> Icons.Default.BluetoothDisabled
                 isBtConnected -> Icons.Default.BluetoothConnected
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> Icons.AutoMirrored.Filled.BluetoothSearching
                 else -> Icons.Default.Bluetooth
             }
             val btTint = when {
                 !isBtOn -> colors.secondaryText.copy(alpha = 0.4f)
                 isBtConnected -> ElectricBlue
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> AlertRed
                 else -> ElectricBlue.copy(alpha = 0.75f)
             }
             val btTextColor = when {
                 !isBtOn -> colors.secondaryText.copy(alpha = 0.4f)
                 isBtConnected -> colors.primaryText
+                bluetoothStatus == BluetoothConnectionStatus.SEARCHING -> WarningOrange
+                bluetoothStatus == BluetoothConnectionStatus.DISCONNECTED -> AlertRed
                 else -> colors.secondaryText
             }
 

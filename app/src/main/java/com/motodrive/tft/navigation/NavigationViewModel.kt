@@ -449,7 +449,18 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
                 return@launch
             }
 
-            val originPoint = if (loc != null) GeoPoint(loc.latitude, loc.longitude) else GeoPoint(12.9716, 77.5946)
+            if (loc == null) {
+                _uiState.update {
+                    it.copy(
+                        isRouteLoading = false,
+                        isNavigating = false,
+                        errorMessage = "Acquiring live GPS location... Please wait a moment."
+                    )
+                }
+                return@launch
+            }
+
+            val originPoint = GeoPoint(loc.latitude, loc.longitude)
             startInAppGuidance(originPoint, resolved)
         }
     }
@@ -467,7 +478,16 @@ class NavigationViewModel(application: Application) : AndroidViewModel(applicati
             }
 
             if (destPoint != null) {
-                val origin = if (loc != null) GeoPoint(loc.latitude, loc.longitude) else GeoPoint(12.9716, 77.5946)
+                if (loc == null) {
+                    _uiState.update {
+                        it.copy(
+                            isRouteLoading = false,
+                            errorMessage = "Acquiring live GPS location... Please wait a moment."
+                        )
+                    }
+                    return@launch
+                }
+                val origin = GeoPoint(loc.latitude, loc.longitude)
                 startInAppGuidance(origin, GeocodeResult(destPoint, place.primaryText))
             } else {
                 _uiState.update {

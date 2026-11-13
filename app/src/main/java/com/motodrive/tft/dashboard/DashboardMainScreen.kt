@@ -20,6 +20,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.motodrive.tft.connectivity.ConnectedBtDevice
 import com.motodrive.tft.connectivity.ConnectivityUiState
 import com.motodrive.tft.connectivity.PhoneConnectivityScreen
 import com.motodrive.tft.connectivity.apple.IphoneBleConnectionState
@@ -91,6 +92,9 @@ fun DashboardMainScreen(
     onNotifyInstagramChange: (Boolean) -> Unit = {},
     onNotifySmsChange: (Boolean) -> Unit = {},
     onNotifySnapchatChange: (Boolean) -> Unit = {},
+    onConnectBtDevice: (ConnectedBtDevice) -> Unit = {},
+    onStartBtDiscovery: () -> Unit = {},
+    onCancelBtDiscovery: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     var activeTab by remember { mutableStateOf(MotoDriveTab.NAVIGATION) }
@@ -135,6 +139,7 @@ fun DashboardMainScreen(
                 isRidingMode = isMoving,
                 isBluetoothEnabled = connectivityUiState.isBluetoothEnabled,
                 isBluetoothConnected = connectivityUiState.isConnected,
+                bluetoothStatus = connectivityUiState.bluetoothStatus,
                 connectedDeviceName = connectivityUiState.connectedDeviceName
             )
 
@@ -272,7 +277,10 @@ fun DashboardMainScreen(
                         MotoDriveTab.PHONE -> {
                             PhoneConnectivityScreen(
                                 uiState = connectivityUiState,
-                                onQuickCall = onQuickCall
+                                onQuickCall = onQuickCall,
+                                onConnectDevice = onConnectBtDevice,
+                                onStartDiscovery = onStartBtDiscovery,
+                                onCancelDiscovery = onCancelBtDiscovery
                             )
                         }
 
