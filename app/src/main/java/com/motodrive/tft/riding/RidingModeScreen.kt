@@ -1,5 +1,7 @@
 package com.motodrive.tft.riding
 
+import com.motodrive.tft.core.util.Units
+
 import android.location.Location
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,7 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motodrive.tft.core.components.GlowCard
 import com.motodrive.tft.core.theme.*
-import com.motodrive.tft.core.util.Units
 import com.motodrive.tft.media.MediaUiState
 import com.motodrive.tft.navigation.NavigationMapView
 import com.motodrive.tft.navigation.NavigationUiState
@@ -128,9 +129,8 @@ fun RidingModeScreen(
                     )
                 }
 
-                val displaySpeed = Units.speedToDisplay(speedUiState.currentSpeedKmH, speedUiState.speedUnit).toInt()
                 Text(
-                    text = "$displaySpeed",
+                    text = "${Units.speed(speedUiState.currentSpeedKmH, speedUiState.speedUnit).toInt()}",
                     style = MotoDriveTypography.displayLarge.copy(
                         fontSize = 58.sp,
                         fontWeight = FontWeight.ExtraBold
@@ -139,7 +139,7 @@ fun RidingModeScreen(
                 )
 
                 Text(
-                    text = Units.speedLabel(speedUiState.speedUnit),
+                    text = speedUiState.speedUnit.uppercase(),
                     style = MotoDriveTypography.labelLarge.copy(color = ElectricBlue, fontWeight = FontWeight.Bold)
                 )
             }

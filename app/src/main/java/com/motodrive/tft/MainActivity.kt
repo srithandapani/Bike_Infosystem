@@ -95,11 +95,19 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // Sync speed unit from saved settings
+        // Keep speedometer unit in sync with persisted setting (was only synced on change)
+        lifecycleScope.launch {
+            settingsViewModel.settings.collect { speedometerViewModel.setSpeedUnit(it.speedUnit) }
+        }
+
+        // Surface navigation errors (e.g. destination not found, no route)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
-                settingsViewModel.settings.collect { settings ->
-                    speedometerViewModel.setSpeedUnit(settings.speedUnit)
+                navigationViewModel.uiState.collect { st ->
+                    st.errorMessage?.let {
+                        android.widget.Toast.makeText(this@MainActivity, it, android.widget.Toast.LENGTH_LONG).show()
+                        navigationViewModel.clearError()
+                    }
                 }
             }
         }
@@ -179,7 +187,6 @@ class MainActivity : ComponentActivity() {
                         onSpeedUnitChange = {
                             settingsViewModel.updateSpeedUnit(it)
                             speedometerViewModel.setSpeedUnit(it)
-                            navigationViewModel.setSpeedUnit(it)
                         },
                         onTempUnitChange = {
                             settingsViewModel.updateTemperatureUnit(it)

@@ -69,3 +69,4 @@ class SpeedFilterTest {
         assertTrue("Moving average must reflect actual riding speed", movingAverage > totalAverage)
     }
 }
+

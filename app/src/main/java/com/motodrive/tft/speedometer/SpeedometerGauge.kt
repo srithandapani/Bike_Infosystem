@@ -1,5 +1,7 @@
 package com.motodrive.tft.speedometer
 
+import com.motodrive.tft.core.util.Units
+
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -34,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.motodrive.tft.core.components.GlowCard
 import com.motodrive.tft.core.theme.*
-import com.motodrive.tft.core.util.Units
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -55,20 +56,14 @@ fun SpeedometerGauge(
 ) {
     val colors = LocalCockpitColors.current
 
-    val isMph = speedUnit.equals("mph", ignoreCase = true)
-    val effectiveMaxGaugeSpeed = if (isMph) 120f else maxGaugeSpeed
-    val displaySpeed = Units.speedToDisplay(speedKmH, speedUnit)
-    val displayMaxSpeed = Units.speedToDisplay(maxSpeedKmH, speedUnit)
-    val displayAvgSpeed = Units.speedToDisplay(averageSpeedKmH, speedUnit)
-
     // Smooth animated speed representation
     val animatedSpeed by animateFloatAsState(
-        targetValue = displaySpeed.coerceIn(0f, effectiveMaxGaugeSpeed),
+        targetValue = speedKmH.coerceIn(0f, maxGaugeSpeed),
         animationSpec = tween(durationMillis = 240, easing = FastOutSlowInEasing),
         label = "gaugeSpeed"
     )
 
-    val sweepRatio = (animatedSpeed / effectiveMaxGaugeSpeed).coerceIn(0f, 1f)
+    val sweepRatio = (animatedSpeed / maxGaugeSpeed).coerceIn(0f, 1f)
 
     GlowCard(
         modifier = modifier
@@ -154,8 +149,8 @@ fun SpeedometerGauge(
                     "ANALOG" -> {
                         AnalogGaugeCanvas(
                             animatedSpeed = animatedSpeed,
-                            maxGaugeSpeed = effectiveMaxGaugeSpeed,
-                            speedUnit = Units.speedLabel(speedUnit),
+                            maxGaugeSpeed = maxGaugeSpeed,
+                            speedUnit = speedUnit,
                             hasGpsFix = hasGpsFix,
                             colors = colors
                         )
@@ -164,10 +159,10 @@ fun SpeedometerGauge(
                         HybridGaugeCanvas(
                             animatedSpeed = animatedSpeed,
                             sweepRatio = sweepRatio,
-                            maxGaugeSpeed = effectiveMaxGaugeSpeed,
-                            maxSpeedKmH = displayMaxSpeed,
-                            averageSpeedKmH = displayAvgSpeed,
-                            speedUnit = Units.speedLabel(speedUnit),
+                            maxGaugeSpeed = maxGaugeSpeed,
+                            maxSpeedKmH = maxSpeedKmH,
+                            averageSpeedKmH = averageSpeedKmH,
+                            speedUnit = speedUnit,
                             hasGpsFix = hasGpsFix,
                             colors = colors
                         )
@@ -177,7 +172,7 @@ fun SpeedometerGauge(
                         DigitalGaugeCanvas(
                             animatedSpeed = animatedSpeed,
                             sweepRatio = sweepRatio,
-                            speedUnit = Units.speedLabel(speedUnit),
+                            speedUnit = speedUnit,
                             hasGpsFix = hasGpsFix,
                             colors = colors
                         )
@@ -204,7 +199,7 @@ fun SpeedometerGauge(
                         color = colors.secondaryText
                     )
                     Text(
-                        text = Units.formatTripDistance(tripDistanceKm, speedUnit),
+                        text = String.format("%.1f %s", tripDistanceKm, Units.distanceLabel(speedUnit)),
                         style = MotoDriveTypography.bodyLarge.copy(fontWeight = FontWeight.Bold),
                         color = colors.primaryText
                     )

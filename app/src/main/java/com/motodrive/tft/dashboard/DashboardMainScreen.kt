@@ -1,5 +1,7 @@
 package com.motodrive.tft.dashboard
 
+import com.motodrive.tft.core.util.Units
+
 import android.location.Location
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -167,15 +169,15 @@ fun DashboardMainScreen(
                                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         SpeedometerGauge(
-                                            speedKmH = speedUiState.currentSpeedKmH,
+                                            speedKmH = Units.speed(speedUiState.currentSpeedKmH, settings.speedUnit),
                                             headingDegrees = speedUiState.headingDegrees,
                                             headingCardinal = speedUiState.headingCardinal,
-                                            tripDistanceKm = speedUiState.tripDistanceKm,
+                                            tripDistanceKm = Units.distance(speedUiState.tripDistanceKm, settings.speedUnit),
                                             rideDurationSeconds = speedUiState.rideDurationSeconds,
                                             hasGpsFix = speedUiState.hasGpsFix,
                                             speedUnit = settings.speedUnit,
-                                            maxSpeedKmH = speedUiState.maxSpeedKmH,
-                                            averageSpeedKmH = speedUiState.averageSpeedKmH,
+                                            maxSpeedKmH = Units.speed(speedUiState.maxSpeedKmH, settings.speedUnit),
+                                            averageSpeedKmH = Units.speed(speedUiState.averageSpeedKmH, settings.speedUnit),
                                             clusterStyle = settings.clusterStyle,
                                             modifier = Modifier
                                                 .weight(0.55f)
@@ -218,15 +220,15 @@ fun DashboardMainScreen(
                                         verticalArrangement = Arrangement.spacedBy(8.dp)
                                     ) {
                                         SpeedometerGauge(
-                                            speedKmH = speedUiState.currentSpeedKmH,
+                                            speedKmH = Units.speed(speedUiState.currentSpeedKmH, settings.speedUnit),
                                             headingDegrees = speedUiState.headingDegrees,
                                             headingCardinal = speedUiState.headingCardinal,
-                                            tripDistanceKm = speedUiState.tripDistanceKm,
+                                            tripDistanceKm = Units.distance(speedUiState.tripDistanceKm, settings.speedUnit),
                                             rideDurationSeconds = speedUiState.rideDurationSeconds,
                                             hasGpsFix = speedUiState.hasGpsFix,
                                             speedUnit = settings.speedUnit,
-                                            maxSpeedKmH = speedUiState.maxSpeedKmH,
-                                            averageSpeedKmH = speedUiState.averageSpeedKmH,
+                                            maxSpeedKmH = Units.speed(speedUiState.maxSpeedKmH, settings.speedUnit),
+                                            averageSpeedKmH = Units.speed(speedUiState.averageSpeedKmH, settings.speedUnit),
                                             clusterStyle = settings.clusterStyle,
                                             modifier = Modifier.weight(1f)
                                         )

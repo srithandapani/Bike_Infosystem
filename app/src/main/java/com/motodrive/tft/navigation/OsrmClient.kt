@@ -4,168 +4,190 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import org.osmdroid.util.GeoPoint
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.net.HttpURLConnection
 import java.net.URL
-import java.text.SimpleDateFormat
-import java.util.*
-import kotlin.math.*
+import java.net.URLEncoder
+import java.util.Locale
 
-data class OsrmStep(
+/** One routed step (maneuver) with the road geometry index where it happens. */
+data class RouteStep(
     val instruction: String,
     val roadName: String,
-    val turnDirection: TurnDirection,
+    val turn: TurnDirection,
+    /** Length of the road travelled in this step, metres. */
     val distanceMeters: Float,
     val durationSeconds: Float,
-    val point: GeoPoint
+    /** Where the maneuver happens (start of the next step's road). */
+    val point: GeoPoint,
+    /** Index into [RoutedPath.geometry] of the maneuver point. */
+    val geometryIndex: Int
 )
 
-data class OsrmRouteResult(
-    val destinationName: String,
-    val destinationPoint: GeoPoint,
-    val totalDistanceMeters: Float,
-    val totalDurationSeconds: Float,
-    val polylinePoints: List<GeoPoint>,
-    val steps: List<OsrmStep>
+data class RoutedPath(
+    val geometry: List<GeoPoint>,
+    val distanceMeters: Double,
+    val durationSeconds: Double,
+    val steps: List<RouteStep>
 )
 
+data class GeocodeResult(val point: GeoPoint, val title: String)
+
+/**
+ * Real road routing + geocoding over OpenStreetMap data.
+ *
+ * Defaults to the public OSRM demo server and Nominatim, which are fine for development but have no
+ * SLA and usage limits. For production point [routingBaseUrl] at a self-hosted OSRM / GraphHopper /
+ * OpenRouteService instance.
+ */
 object OsrmClient {
+    var routingBaseUrl = "https://router.project-osrm.org"
+    var nominatimBaseUrl = "https://nominatim.openstreetmap.org"
+    private const val USER_AGENT = "MotoDriveTFT/1.0 (motorcycle infotainment)"
 
-    /**
-     * Base URL for the OSRM routing engine.
-     * Defaults to the public OSRM demo server for development.
-     * Can be pointed to a self-hosted or dedicated motorcycle routing server.
-     */
-    var routingBaseUrl: String = "https://router.project-osrm.org"
+    private fun get(url: String): String? {
+        val c = URL(url).openConnection() as HttpURLConnection
+        return try {
+            c.requestMethod = "GET"
+            c.connectTimeout = 8000
+            c.readTimeout = 10000
+            c.setRequestProperty("User-Agent", USER_AGENT)
+            c.setRequestProperty("Accept-Language", Locale.getDefault().toLanguageTag())
+            if (c.responseCode == 200) c.inputStream.bufferedReader().use { it.readText() } else null
+        } finally {
+            c.disconnect()
+        }
+    }
 
-    suspend fun fetchRoute(
-        start: GeoPoint,
-        destination: GeoPoint,
-        destinationName: String
-    ): Result<OsrmRouteResult> = withContext(Dispatchers.IO) {
+    /** Free-text geocoding, biased towards [near] (never returns invented coordinates). */
+    suspend fun geocode(query: String, near: GeoPoint?): GeocodeResult? = withContext(Dispatchers.IO) {
         try {
-            val urlString = "$routingBaseUrl/route/v1/driving/${start.longitude},${start.latitude};${destination.longitude},${destination.latitude}?overview=full&geometries=geojson&steps=true"
-            val url = URL(urlString)
-            val connection = url.openConnection() as HttpURLConnection
-            connection.requestMethod = "GET"
-            connection.connectTimeout = 8000
-            connection.readTimeout = 8000
-            connection.setRequestProperty("User-Agent", "BikeInfosystem/2.0 (Motorcycle Cockpit)")
+            val q = URLEncoder.encode(query, "UTF-8")
+            val bias = near?.let {
+                val d = 0.5 // ~50 km box: prefer nearby matches, not bounded
+                "&viewbox=${it.longitude - d},${it.latitude + d},${it.longitude + d},${it.latitude - d}"
+            } ?: ""
+            val body = get("$nominatimBaseUrl/search?format=jsonv2&limit=1&q=$q$bias") ?: return@withContext null
+            val arr = org.json.JSONArray(body)
+            if (arr.length() == 0) return@withContext null
+            val o = arr.getJSONObject(0)
+            GeocodeResult(
+                GeoPoint(o.getString("lat").toDouble(), o.getString("lon").toDouble()),
+                o.optString("name").ifBlank { o.optString("display_name").substringBefore(",") }
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
 
-            if (connection.responseCode == 200) {
-                val reader = BufferedReader(InputStreamReader(connection.inputStream))
-                val response = reader.readText()
-                reader.close()
-
-                val json = JSONObject(response)
-                val code = json.optString("code", "")
-                if (code != "Ok") {
-                    return@withContext Result.failure(Exception("OSRM routing returned code: $code"))
-                }
-
-                val routes = json.getJSONArray("routes")
-                if (routes.length() == 0) {
-                    return@withContext Result.failure(Exception("No route found between coordinates"))
-                }
-
-                val primaryRoute = routes.getJSONObject(0)
-                val totalDistance = primaryRoute.getDouble("distance").toFloat()
-                val totalDuration = primaryRoute.getDouble("duration").toFloat()
-
-                // Polyline coordinates from GeoJSON
-                val geometry = primaryRoute.getJSONObject("geometry")
-                val coordinates = geometry.getJSONArray("coordinates")
-                val polyline = mutableListOf<GeoPoint>()
-                for (i in 0 until coordinates.length()) {
-                    val coord = coordinates.getJSONArray(i)
-                    val lon = coord.getDouble(0)
-                    val lat = coord.getDouble(1)
-                    polyline.add(GeoPoint(lat, lon))
-                }
-
-                // Legs and Steps
-                val legs = primaryRoute.getJSONArray("legs")
-                val steps = mutableListOf<OsrmStep>()
-                if (legs.length() > 0) {
-                    val leg = legs.getJSONObject(0)
-                    val jsonSteps = leg.getJSONArray("steps")
-                    for (i in 0 until jsonSteps.length()) {
-                        val stepObj = jsonSteps.getJSONObject(i)
-                        val stepDist = stepObj.getDouble("distance").toFloat()
-                        val stepDuration = stepObj.getDouble("duration").toFloat()
-                        val roadName = stepObj.optString("name", "").ifBlank { "Road" }
-
-                        val maneuver = stepObj.getJSONObject("maneuver")
-                        val manType = maneuver.optString("type", "")
-                        val manModifier = maneuver.optString("modifier", "")
-                        val manLoc = maneuver.getJSONArray("location")
-                        val stepPt = GeoPoint(manLoc.getDouble(1), manLoc.getDouble(0))
-
-                        val turnDir = mapManeuverToTurnDirection(manType, manModifier)
-                        val instruction = buildInstruction(turnDir, manType, roadName)
-
-                        steps.add(
-                            OsrmStep(
-                                instruction = instruction,
-                                roadName = roadName,
-                                turnDirection = turnDir,
-                                distanceMeters = stepDist,
-                                durationSeconds = stepDuration,
-                                point = stepPt
-                            )
-                        )
+    /** Nearest place of an OSM amenity (fuel, motorcycle repair...) via Overpass, within [radiusM]. */
+    suspend fun nearestAmenity(filter: String, near: GeoPoint, radiusM: Int = 10000): GeocodeResult? =
+        withContext(Dispatchers.IO) {
+            try {
+                val ql = "[out:json][timeout:10];nwr$filter(around:$radiusM,${near.latitude},${near.longitude});out center 30;"
+                val body = get("https://overpass-api.de/api/interpreter?data=${URLEncoder.encode(ql, "UTF-8")}")
+                    ?: return@withContext null
+                val els = JSONObject(body).getJSONArray("elements")
+                var best: GeocodeResult? = null
+                var bestD = Double.MAX_VALUE
+                for (i in 0 until els.length()) {
+                    val e = els.getJSONObject(i)
+                    val lat = if (e.has("lat")) e.getDouble("lat") else e.optJSONObject("center")?.getDouble("lat") ?: continue
+                    val lon = if (e.has("lon")) e.getDouble("lon") else e.optJSONObject("center")?.getDouble("lon") ?: continue
+                    val d = GeoPoint(lat, lon).distanceToAsDouble(near)
+                    if (d < bestD) {
+                        bestD = d
+                        val tags = e.optJSONObject("tags")
+                        best = GeocodeResult(GeoPoint(lat, lon), tags?.optString("name").orEmpty().ifBlank {
+                            tags?.optString("brand").orEmpty().ifBlank { "Nearest match" }
+                        })
                     }
                 }
-
-                Result.success(
-                    OsrmRouteResult(
-                        destinationName = destinationName,
-                        destinationPoint = destination,
-                        totalDistanceMeters = totalDistance,
-                        totalDurationSeconds = totalDuration,
-                        polylinePoints = polyline,
-                        steps = steps
-                    )
-                )
-            } else {
-                Result.failure(Exception("OSRM server returned HTTP ${connection.responseCode}"))
+                best
+            } catch (_: Exception) {
+                null
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+        }
+
+    /** Real road route from [from] to [to]; null when offline / no route. */
+    suspend fun route(from: GeoPoint, to: GeoPoint): RoutedPath? = withContext(Dispatchers.IO) {
+        try {
+            val coords = "${from.longitude},${from.latitude};${to.longitude},${to.latitude}"
+            val body = get("$routingBaseUrl/route/v1/driving/$coords?overview=full&geometries=geojson&steps=true&annotations=false")
+                ?: return@withContext null
+            val json = JSONObject(body)
+            if (json.optString("code") != "Ok") return@withContext null
+            val r = json.getJSONArray("routes").getJSONObject(0)
+
+            val gj = r.getJSONObject("geometry").getJSONArray("coordinates")
+            val geometry = ArrayList<GeoPoint>(gj.length())
+            for (i in 0 until gj.length()) {
+                val p = gj.getJSONArray(i)
+                geometry.add(GeoPoint(p.getDouble(1), p.getDouble(0)))
+            }
+
+            val steps = ArrayList<RouteStep>()
+            val legs = r.getJSONArray("legs")
+            for (l in 0 until legs.length()) {
+                val st = legs.getJSONObject(l).getJSONArray("steps")
+                for (i in 0 until st.length()) {
+                    val s = st.getJSONObject(i)
+                    val m = s.getJSONObject("maneuver")
+                    val loc = m.getJSONArray("location")
+                    val pt = GeoPoint(loc.getDouble(1), loc.getDouble(0))
+                    val road = s.optString("name").ifBlank { "the road" }
+                    val type = m.optString("type")
+                    val modifier = m.optString("modifier")
+                    val turn = toTurn(type, modifier)
+                    steps.add(
+                        RouteStep(
+                            instruction = describe(type, modifier, road),
+                            roadName = road,
+                            turn = turn,
+                            distanceMeters = s.getDouble("distance").toFloat(),
+                            durationSeconds = s.getDouble("duration").toFloat(),
+                            point = pt,
+                            geometryIndex = nearestIndex(geometry, pt)
+                        )
+                    )
+                }
+            }
+            RoutedPath(geometry, r.getDouble("distance"), r.getDouble("duration"), steps)
+        } catch (_: Exception) {
+            null
         }
     }
 
-    private fun mapManeuverToTurnDirection(type: String, modifier: String): TurnDirection {
-        val t = type.lowercase(Locale.ROOT)
-        val m = modifier.lowercase(Locale.ROOT)
-
-        return when {
-            t == "arrive" -> TurnDirection.DESTINATION
-            t == "roundabout" || t == "rotary" -> TurnDirection.ROUNDABOUT
-            m.contains("uturn") -> TurnDirection.U_TURN
-            m == "sharp left" -> TurnDirection.SHARP_LEFT
-            m == "left" -> TurnDirection.TURN_LEFT
-            m == "slight left" -> TurnDirection.SLIGHT_LEFT
-            m == "sharp right" -> TurnDirection.SHARP_RIGHT
-            m == "right" -> TurnDirection.TURN_RIGHT
-            m == "slight right" -> TurnDirection.SLIGHT_RIGHT
-            else -> TurnDirection.STRAIGHT
+    private fun nearestIndex(g: List<GeoPoint>, p: GeoPoint): Int {
+        var bi = 0
+        var bd = Double.MAX_VALUE
+        for (i in g.indices) {
+            val d = g[i].distanceToAsDouble(p)
+            if (d < bd) { bd = d; bi = i }
         }
+        return bi
     }
 
-    private fun buildInstruction(dir: TurnDirection, type: String, road: String): String {
-        return when (dir) {
-            TurnDirection.DESTINATION -> "Arrive at $road"
-            TurnDirection.ROUNDABOUT -> "Enter roundabout onto $road"
-            TurnDirection.U_TURN -> "Make a U-turn onto $road"
-            TurnDirection.SHARP_LEFT -> "Sharp left onto $road"
-            TurnDirection.TURN_LEFT -> "Turn left onto $road"
-            TurnDirection.SLIGHT_LEFT -> "Bear left onto $road"
-            TurnDirection.SHARP_RIGHT -> "Sharp right onto $road"
-            TurnDirection.TURN_RIGHT -> "Turn right onto $road"
-            TurnDirection.SLIGHT_RIGHT -> "Bear right onto $road"
-            TurnDirection.STRAIGHT -> if (type == "depart") "Head on $road" else "Continue straight on $road"
-        }
+    private fun toTurn(type: String, modifier: String): TurnDirection = when {
+        type == "arrive" -> TurnDirection.DESTINATION
+        type == "roundabout" || type == "rotary" || type == "exit roundabout" -> TurnDirection.ROUNDABOUT
+        modifier == "uturn" -> TurnDirection.U_TURN
+        modifier == "sharp left" -> TurnDirection.SHARP_LEFT
+        modifier == "left" -> TurnDirection.TURN_LEFT
+        modifier == "slight left" -> TurnDirection.SLIGHT_LEFT
+        modifier == "sharp right" -> TurnDirection.SHARP_RIGHT
+        modifier == "right" -> TurnDirection.TURN_RIGHT
+        modifier == "slight right" -> TurnDirection.SLIGHT_RIGHT
+        else -> TurnDirection.STRAIGHT
+    }
+
+    private fun describe(type: String, modifier: String, road: String): String = when (type) {
+        "depart" -> "Head out on $road"
+        "arrive" -> "Arrive at your destination"
+        "roundabout", "rotary" -> "Enter the roundabout towards $road"
+        "merge" -> "Merge onto $road"
+        "on ramp", "off ramp" -> "Take the ramp onto $road"
+        "fork" -> "Keep ${modifier.ifBlank { "straight" }} onto $road"
+        else -> if (modifier == "straight" || modifier.isBlank()) "Continue on $road"
+        else "Turn $modifier onto $road"
     }
 }
