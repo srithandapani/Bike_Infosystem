@@ -71,6 +71,8 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
     private var headsetProfile: BluetoothHeadset? = null
     private val discoveredDevicesList = mutableListOf<ConnectedBtDevice>()
 
+    var onDeviceBonded: ((BluetoothDevice) -> Unit)? = null
+
     private val _uiState = MutableStateFlow(ConnectivityUiState())
     val uiState: StateFlow<ConnectivityUiState> = _uiState.asStateFlow()
 
@@ -217,6 +219,7 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                     )
                 }
                 connectProfiles(dev)
+                onDeviceBonded?.invoke(dev)
             }
             BluetoothDevice.BOND_NONE -> {
                 discoveredDevicesList.removeAll { it.address == dev.address }
@@ -309,11 +312,6 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                             discoveredDevices = updatedDiscovered
                         )
                     }
-                } else if (fromUserClick) {
-                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    getApplication<Application>().startActivity(intent)
                 }
                 return
             }
@@ -325,23 +323,9 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
                 )
             }
 
-            val connected = connectProfiles(remoteDevice)
-            if (!connected && fromUserClick) {
-                val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                }
-                getApplication<Application>().startActivity(intent)
-            }
+            connectProfiles(remoteDevice)
         } catch (e: Exception) {
             e.printStackTrace()
-            if (fromUserClick) {
-                try {
-                    val intent = Intent(Settings.ACTION_BLUETOOTH_SETTINGS).apply {
-                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    }
-                    getApplication<Application>().startActivity(intent)
-                } catch (_: Exception) {}
-            }
         }
     }
 
@@ -351,18 +335,37 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
             if (a2dpProfile == null || headsetProfile == null) {
                 bindBluetoothProfiles()
             }
-            val connectA2dpMethod = a2dpProfile?.javaClass?.getMethod("connect", BluetoothDevice::class.java)
-            if (connectA2dpMethod != null && a2dpProfile != null) {
-                connectA2dpMethod.isAccessible = true
-                connectA2dpMethod.invoke(a2dpProfile, remoteDevice)
-                invoked = true
+
+            // 1. Try A2DP connect
+            val a2dp = a2dpProfile
+            if (a2dp != null) {
+                try {
+                    val connectA2dpMethod = a2dp.javaClass.getMethod("connect", BluetoothDevice::class.java)
+                    connectA2dpMethod.isAccessible = true
+                    val res = connectA2dpMethod.invoke(a2dp, remoteDevice) as? Boolean ?: true
+                    if (res) invoked = true
+                } catch (_: Exception) {}
             }
 
-            val connectHeadsetMethod = headsetProfile?.javaClass?.getMethod("connect", BluetoothDevice::class.java)
-            if (connectHeadsetMethod != null && headsetProfile != null) {
-                connectHeadsetMethod.isAccessible = true
-                connectHeadsetMethod.invoke(headsetProfile, remoteDevice)
-                invoked = true
+            // 2. Try Headset connect
+            val headset = headsetProfile
+            if (headset != null) {
+                try {
+                    val connectHeadsetMethod = headset.javaClass.getMethod("connect", BluetoothDevice::class.java)
+                    connectHeadsetMethod.isAccessible = true
+                    val res = connectHeadsetMethod.invoke(headset, remoteDevice) as? Boolean ?: true
+                    if (res) invoked = true
+                } catch (_: Exception) {}
+            }
+
+            // 3. Fallback on Android 11+ via BluetoothDevice.connect()
+            if (!invoked) {
+                try {
+                    val devConnectMethod = remoteDevice.javaClass.getMethod("connect")
+                    devConnectMethod.isAccessible = true
+                    val res = devConnectMethod.invoke(remoteDevice) as? Boolean ?: false
+                    if (res) invoked = true
+                } catch (_: Exception) {}
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -374,16 +377,34 @@ class ConnectivityViewModel(application: Application) : AndroidViewModel(applica
         val adapter = bluetoothAdapter ?: return
         try {
             val remoteDevice = adapter.getRemoteDevice(device.address)
-            val disconnectA2dpMethod = a2dpProfile?.javaClass?.getMethod("disconnect", BluetoothDevice::class.java)
-            if (disconnectA2dpMethod != null && a2dpProfile != null) {
-                disconnectA2dpMethod.isAccessible = true
-                disconnectA2dpMethod.invoke(a2dpProfile, remoteDevice)
+            var disconnected = false
+
+            val a2dp = a2dpProfile
+            if (a2dp != null) {
+                try {
+                    val disconnectA2dpMethod = a2dp.javaClass.getMethod("disconnect", BluetoothDevice::class.java)
+                    disconnectA2dpMethod.isAccessible = true
+                    disconnectA2dpMethod.invoke(a2dp, remoteDevice)
+                    disconnected = true
+                } catch (_: Exception) {}
             }
 
-            val disconnectHeadsetMethod = headsetProfile?.javaClass?.getMethod("disconnect", BluetoothDevice::class.java)
-            if (disconnectHeadsetMethod != null && headsetProfile != null) {
-                disconnectHeadsetMethod.isAccessible = true
-                disconnectHeadsetMethod.invoke(headsetProfile, remoteDevice)
+            val headset = headsetProfile
+            if (headset != null) {
+                try {
+                    val disconnectHeadsetMethod = headset.javaClass.getMethod("disconnect", BluetoothDevice::class.java)
+                    disconnectHeadsetMethod.isAccessible = true
+                    disconnectHeadsetMethod.invoke(headset, remoteDevice)
+                    disconnected = true
+                } catch (_: Exception) {}
+            }
+
+            if (!disconnected) {
+                try {
+                    val devDisconnectMethod = remoteDevice.javaClass.getMethod("disconnect")
+                    devDisconnectMethod.isAccessible = true
+                    devDisconnectMethod.invoke(remoteDevice)
+                } catch (_: Exception) {}
             }
 
             _uiState.update {

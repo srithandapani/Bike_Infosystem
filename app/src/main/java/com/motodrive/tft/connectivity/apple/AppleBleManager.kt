@@ -3,8 +3,12 @@ package com.motodrive.tft.connectivity.apple
 import android.annotation.SuppressLint
 import android.bluetooth.*
 import android.bluetooth.le.ScanCallback
+import android.bluetooth.le.ScanFilter
 import android.bluetooth.le.ScanResult
+import android.bluetooth.le.ScanSettings
 import android.content.Context
+import android.os.Build
+import android.os.ParcelUuid
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,6 +20,7 @@ import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.UUID
 
 @SuppressLint("MissingPermission")
 class AppleBleManager(private val context: Context) {
@@ -80,23 +85,56 @@ class AppleBleManager(private val context: Context) {
         }
     }
 
+    private fun writeDescriptorSafely(gatt: BluetoothGatt, descriptor: BluetoothGattDescriptor, value: ByteArray) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeDescriptor(descriptor, value)
+            } else {
+                @Suppress("DEPRECATION")
+                descriptor.value = value
+                @Suppress("DEPRECATION")
+                gatt.writeDescriptor(descriptor)
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "writeDescriptor error", e)
+            advanceGattQueue()
+        }
+    }
+
+    private fun writeCharacteristicSafely(gatt: BluetoothGatt, char: BluetoothGattCharacteristic, value: ByteArray) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                gatt.writeCharacteristic(char, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT)
+            } else {
+                @Suppress("DEPRECATION")
+                char.value = value
+                @Suppress("DEPRECATION")
+                gatt.writeCharacteristic(char)
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "writeCharacteristic error", e)
+            advanceGattQueue()
+        }
+    }
+
     private val gattCallback = object : BluetoothGattCallback() {
         override fun onConnectionStateChange(gatt: BluetoothGatt, status: Int, newState: Int) {
             when (newState) {
                 BluetoothProfile.STATE_CONNECTED -> {
                     Log.i(tag, "Connected to iPhone GATT server: ${gatt.device.name}")
+                    gatt.requestConnectionPriority(BluetoothGatt.CONNECTION_PRIORITY_HIGH)
                     _connectionState.update {
                         it.copy(
                             isConnected = true,
                             deviceName = gatt.device.name ?: "Apple iPhone",
                             deviceAddress = gatt.device.address,
-                            statusMessage = "Connected. Discovering Apple Services..."
+                            statusMessage = "Connected. Setting up Apple ANCS & Music..."
                         )
                     }
                     gatt.discoverServices()
                 }
                 BluetoothProfile.STATE_DISCONNECTED -> {
-                    Log.w(tag, "Disconnected from iPhone. Scheduling auto-reconnect...")
+                    Log.w(tag, "Disconnected from iPhone. GATT status=$status")
                     _connectionState.update {
                         it.copy(
                             isConnected = false,
@@ -110,6 +148,12 @@ class AppleBleManager(private val context: Context) {
                     synchronized(gattQueue) {
                         gattQueue.clear()
                         isQueueBusy = false
+                    }
+                    try {
+                        gatt.close()
+                    } catch (_: Exception) {}
+                    if (activeGatt == gatt) {
+                        activeGatt = null
                     }
                 }
             }
@@ -139,9 +183,7 @@ class AppleBleManager(private val context: Context) {
                         gatt.setCharacteristicNotification(notifSource, true)
                         val descriptor = notifSource.getDescriptor(AppleBleConstants.CCCD_UUID)
                         if (descriptor != null) {
-                            @Suppress("DEPRECATION")
-                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                            gatt.writeDescriptor(descriptor)
+                            writeDescriptorSafely(gatt, descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                         } else {
                             advanceGattQueue()
                         }
@@ -153,9 +195,7 @@ class AppleBleManager(private val context: Context) {
                         gatt.setCharacteristicNotification(dataSource, true)
                         val descriptor = dataSource.getDescriptor(AppleBleConstants.CCCD_UUID)
                         if (descriptor != null) {
-                            @Suppress("DEPRECATION")
-                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                            gatt.writeDescriptor(descriptor)
+                            writeDescriptorSafely(gatt, descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                         } else {
                             advanceGattQueue()
                         }
@@ -175,9 +215,7 @@ class AppleBleManager(private val context: Context) {
                         gatt.setCharacteristicNotification(entityUpdate, true)
                         val descriptor = entityUpdate.getDescriptor(AppleBleConstants.CCCD_UUID)
                         if (descriptor != null) {
-                            @Suppress("DEPRECATION")
-                            descriptor.value = BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
-                            gatt.writeDescriptor(descriptor)
+                            writeDescriptorSafely(gatt, descriptor, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
                         } else {
                             advanceGattQueue()
                         }
@@ -185,34 +223,36 @@ class AppleBleManager(private val context: Context) {
 
                     // 2. Subscribe to Track attributes: Title (2), Artist (0), Album (1), Duration (3)
                     enqueueGatt {
-                        @Suppress("DEPRECATION")
-                        entityUpdate.value = byteArrayOf(
+                        val trackSub = byteArrayOf(
                             AppleBleConstants.ENTITY_ID_TRACK,
                             AppleBleConstants.TRACK_ATTR_TITLE,
                             AppleBleConstants.TRACK_ATTR_ARTIST,
                             AppleBleConstants.TRACK_ATTR_ALBUM,
                             AppleBleConstants.TRACK_ATTR_DURATION
                         )
-                        gatt.writeCharacteristic(entityUpdate)
+                        writeCharacteristicSafely(gatt, entityUpdate, trackSub)
                     }
 
                     // 3. Subscribe to Player attributes: PlaybackInfo (1)
                     enqueueGatt {
-                        @Suppress("DEPRECATION")
-                        entityUpdate.value = byteArrayOf(
+                        val playerSub = byteArrayOf(
                             AppleBleConstants.ENTITY_ID_PLAYER,
                             1.toByte() // PlaybackInfo
                         )
-                        gatt.writeCharacteristic(entityUpdate)
+                        writeCharacteristicSafely(gatt, entityUpdate, playerSub)
                     }
                 }
             }
 
             _connectionState.update {
                 it.copy(
+                    isConnected = true,
                     isAncsReady = ancsFound,
                     isAmsReady = amsFound,
-                    statusMessage = if (ancsFound && amsFound) "iPhone ANCS Notifications & Music Ready" else "Connected to iPhone"
+                    statusMessage = if (ancsFound && amsFound) "iPhone Connected (ANCS & Music Ready)"
+                                   else if (ancsFound) "iPhone Connected (ANCS Active)"
+                                   else if (amsFound) "iPhone Connected (Music Active)"
+                                   else "Connected to iPhone"
                 )
             }
         }
@@ -227,14 +267,30 @@ class AppleBleManager(private val context: Context) {
             advanceGattQueue()
         }
 
+        @Deprecated("Deprecated in Java")
         override fun onCharacteristicChanged(
             gatt: BluetoothGatt,
             characteristic: BluetoothGattCharacteristic
         ) {
             @Suppress("DEPRECATION")
             val value = characteristic.value ?: return
+            dispatchCharacteristicChanged(gatt, characteristic.uuid, value)
+        }
 
-            when (characteristic.uuid) {
+        override fun onCharacteristicChanged(
+            gatt: BluetoothGatt,
+            characteristic: BluetoothGattCharacteristic,
+            value: ByteArray
+        ) {
+            dispatchCharacteristicChanged(gatt, characteristic.uuid, value)
+        }
+
+        private fun dispatchCharacteristicChanged(
+            gatt: BluetoothGatt,
+            charUuid: UUID,
+            value: ByteArray
+        ) {
+            when (charUuid) {
                 AppleBleConstants.ANCS_NOTIFICATION_SOURCE_UUID -> {
                     handleAncsNotificationSource(gatt, value)
                 }
@@ -288,9 +344,7 @@ class AppleBleManager(private val context: Context) {
             cmd.put(AppleBleConstants.NOTIFICATION_ATTRIBUTE_ID_MESSAGE)
             cmd.putShort(128.toShort())
 
-            @Suppress("DEPRECATION")
-            cp.value = cmd.array()
-            gatt.writeCharacteristic(cp)
+            writeCharacteristicSafely(gatt, cp, cmd.array())
         } catch (e: Exception) {
             Log.e(tag, "Failed to request notification attributes", e)
         }
@@ -402,29 +456,89 @@ class AppleBleManager(private val context: Context) {
     }
 
     /**
-     * Connects to a paired iPhone from system Bluetooth settings
+     * Connects to a paired iPhone or initiates discovery for nearby iPhone
      */
     fun connectToBondedIphone(): Boolean {
         val adapter = bluetoothAdapter ?: return false
-        val bonded = adapter.bondedDevices ?: return false
+        val bonded = adapter.bondedDevices.orEmpty()
 
         val iphone = bonded.firstOrNull { dev ->
             val name = dev.name ?: ""
-            name.contains("iPhone", ignoreCase = true) || dev.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.PHONE
+            name.contains("iPhone", ignoreCase = true) ||
+            name.contains("Apple", ignoreCase = true) ||
+            dev.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.PHONE
         }
 
         return if (iphone != null) {
             connectToDevice(iphone)
             true
         } else {
-            _connectionState.update {
-                it.copy(statusMessage = "No paired iPhone detected. Pair iPhone in Bluetooth settings first.")
-            }
+            scanForNearbyIphone()
             false
         }
     }
 
+    private var isScanning = false
+    private val bleScanCallback = object : ScanCallback() {
+        override fun onScanResult(callbackType: Int, result: ScanResult?) {
+            val dev = result?.device ?: return
+            val name = dev.name ?: result.scanRecord?.deviceName ?: ""
+            if (name.contains("iPhone", ignoreCase = true) || name.contains("Apple", ignoreCase = true)) {
+                stopBleScan()
+                connectToDevice(dev)
+            }
+        }
+
+        override fun onScanFailed(errorCode: Int) {
+            Log.e(tag, "BLE Scan failed with code $errorCode")
+            isScanning = false
+            _connectionState.update {
+                it.copy(statusMessage = "Pair iPhone in Bluetooth settings to enable ANCS.")
+            }
+        }
+    }
+
+    fun scanForNearbyIphone() {
+        val scanner = bluetoothAdapter?.bluetoothLeScanner
+        if (scanner == null || isScanning) return
+        try {
+            isScanning = true
+            _connectionState.update {
+                it.copy(statusMessage = "Searching for nearby iPhone...")
+            }
+            val settings = ScanSettings.Builder()
+                .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
+                .build()
+            scanner.startScan(null, settings, bleScanCallback)
+
+            // Auto stop scan after 15 seconds
+            scope.launch {
+                kotlinx.coroutines.delay(15000)
+                if (isScanning) {
+                    stopBleScan()
+                    if (!_connectionState.value.isConnected) {
+                        _connectionState.update {
+                            it.copy(statusMessage = "No iPhone found. Ensure Bluetooth is ON and iPhone is nearby.")
+                        }
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(tag, "Failed to start BLE scan", e)
+            isScanning = false
+        }
+    }
+
+    fun stopBleScan() {
+        if (!isScanning) return
+        try {
+            bluetoothAdapter?.bluetoothLeScanner?.stopScan(bleScanCallback)
+        } catch (_: Exception) {}
+        isScanning = false
+    }
+
     fun connectToDevice(device: BluetoothDevice) {
+        stopBleScan()
         _connectionState.update {
             it.copy(
                 deviceName = device.name ?: "Apple iPhone",
@@ -432,8 +546,17 @@ class AppleBleManager(private val context: Context) {
                 statusMessage = "Connecting to ${device.name ?: "iPhone"}..."
             )
         }
-        activeGatt?.close()
-        activeGatt = device.connectGatt(context, true, gattCallback)
+        try {
+            activeGatt?.disconnect()
+            activeGatt?.close()
+        } catch (_: Exception) {}
+
+        // Immediate direct LE connection with TRANSPORT_LE
+        activeGatt = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            device.connectGatt(context, false, gattCallback, BluetoothDevice.TRANSPORT_LE)
+        } else {
+            device.connectGatt(context, false, gattCallback)
+        }
     }
 
     // =========================================================================
@@ -452,9 +575,7 @@ class AppleBleManager(private val context: Context) {
         val gatt = activeGatt ?: return
         val rc = amsRemoteCommandChar ?: return
         try {
-            @Suppress("DEPRECATION")
-            rc.value = byteArrayOf(commandId)
-            gatt.writeCharacteristic(rc)
+            writeCharacteristicSafely(gatt, rc, byteArrayOf(commandId))
         } catch (e: Exception) {
             Log.e(tag, "Failed to send AMS command $commandId", e)
         }
@@ -473,8 +594,11 @@ class AppleBleManager(private val context: Context) {
     }
 
     fun disconnect() {
-        activeGatt?.disconnect()
-        activeGatt?.close()
+        stopBleScan()
+        try {
+            activeGatt?.disconnect()
+            activeGatt?.close()
+        } catch (_: Exception) {}
         activeGatt = null
         _connectionState.value = IphoneBleConnectionState()
     }

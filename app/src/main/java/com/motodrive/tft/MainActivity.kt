@@ -2,6 +2,7 @@ package com.motodrive.tft
 
 import android.Manifest
 import android.bluetooth.BluetoothAdapter
+import android.bluetooth.BluetoothClass
 import android.bluetooth.BluetoothManager
 import android.content.Context
 import android.content.Intent
@@ -109,6 +110,14 @@ class MainActivity : FragmentActivity() {
 
         // Initialize iPhone Apple BLE Manager (ANCS + AMS)
         appleBleManager = AppleBleManager(this)
+
+        connectivityViewModel.onDeviceBonded = { device ->
+            val name = device.name ?: ""
+            if (name.contains("iPhone", ignoreCase = true) || name.contains("Apple", ignoreCase = true) ||
+                device.bluetoothClass?.majorDeviceClass == BluetoothClass.Device.Major.PHONE) {
+                appleBleManager.connectToDevice(device)
+            }
+        }
 
         // Enable immersive full-screen sticky mode for dedicated motorcycle TFT feel
         setupImmersiveCockpitMode()
@@ -283,8 +292,20 @@ class MainActivity : FragmentActivity() {
                         onNotifyInstagramChange = { settingsViewModel.updateNotifyInstagram(it) },
                         onNotifySmsChange = { settingsViewModel.updateNotifySms(it) },
                         onNotifySnapchatChange = { settingsViewModel.updateNotifySnapchat(it) },
-                        onConnectBtDevice = { connectivityViewModel.connectToDevice(it) },
-                        onDisconnectBtDevice = { connectivityViewModel.disconnectDevice(it) },
+                        onConnectBtDevice = { device ->
+                            connectivityViewModel.connectToDevice(device)
+                            val adapter = (getSystemService(BLUETOOTH_SERVICE) as? BluetoothManager)?.adapter
+                            val btDev = adapter?.getRemoteDevice(device.address)
+                            if (btDev != null && (device.name.contains("iPhone", ignoreCase = true) || device.name.contains("Apple", ignoreCase = true))) {
+                                appleBleManager.connectToDevice(btDev)
+                            }
+                        },
+                        onDisconnectBtDevice = { device ->
+                            connectivityViewModel.disconnectDevice(device)
+                            if (device.name.contains("iPhone", ignoreCase = true) || device.name.contains("Apple", ignoreCase = true)) {
+                                appleBleManager.disconnect()
+                            }
+                        },
                         onUnpairBtDevice = { connectivityViewModel.unpairDevice(it) },
                         onStartBtDiscovery = { connectivityViewModel.startDiscovery() },
                         onCancelBtDiscovery = { connectivityViewModel.cancelDiscovery() },
